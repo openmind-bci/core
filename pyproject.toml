@@ -1,0 +1,112 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openmind-core"
+version = "0.1.0.dev0"
+description = "AI core of OpenMind BCI: decode user intent from EEG, calibrate new users in minutes, publish generic commands over MQTT."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "OpenMind BCI contributors" }]
+requires-python = ">=3.11"
+keywords = ["eeg", "bci", "brain-computer-interface", "motor-imagery", "transfer-learning", "mqtt"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Typing :: Typed",
+]
+# Heavier dependencies (mne, pyriemann, scikit-learn, torch, braindecode) are added
+# by the tasks that use them.
+dependencies = [
+    "openmind-protocol",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pydantic>=2.6",
+    "pylsl>=1.16.2",
+    "paho-mqtt>=2.0",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+research = ["moabb>=1.1", "mlflow>=2.14"]
+plug = ["openmind-plug"]
+
+[project.scripts]
+openmind-core = "openmind_core.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/openmind-bci/core"
+Repository = "https://github.com/openmind-bci/core"
+Issues = "https://github.com/openmind-bci/core/issues"
+Changelog = "https://github.com/openmind-bci/core/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.11",
+    "nbstripout>=0.7",
+    "pre-commit>=3.8",
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+]
+
+[tool.uv.workspace]
+members = ["protocol"]
+
+[tool.uv.sources]
+openmind-protocol = { workspace = true }
+openmind-plug = { git = "https://github.com/openmind-bci/plug.git" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openmind_core"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "tests/", "README.md", "LICENSE", "CHANGELOG.md"]
+
+# --- Lint & format ---------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "protocol/src", "protocol/tests"]
+extend-include = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "SIM", "NPY", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["openmind_core", "openmind_protocol"]
+
+# --- Typing ----------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "protocol/src"]
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["pylsl.*", "mne.*", "moabb.*", "pyriemann.*", "sklearn.*", "scipy.*", "braindecode.*", "mlflow.*"]
+ignore_missing_imports = true
+
+# --- Tests -----------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "protocol/tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
+markers = [
+    "slow: long-running or network-dependent tests (deselect with -m 'not slow')",
+]
+
+[tool.coverage.run]
+source = ["openmind_core", "openmind_protocol"]
+branch = true

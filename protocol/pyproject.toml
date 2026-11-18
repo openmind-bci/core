@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openmind-protocol"
+version = "0.1.0.dev0"
+description = "OpenMind BCI command protocol: MQTT topics, JSON Schemas and validated message models."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "OpenMind BCI contributors" }]
+requires-python = ">=3.11"
+keywords = ["bci", "mqtt", "protocol", "json-schema"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Typing :: Typed",
+]
+dependencies = ["pydantic>=2.6", "jsonschema>=4.21"]
+
+[project.urls]
+Homepage = "https://github.com/openmind-bci/core/tree/main/protocol"
+Repository = "https://github.com/openmind-bci/core"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openmind_protocol"]

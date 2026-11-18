@@ -1,0 +1,22 @@
+name: Slow tests
+
+# Long or network-dependent tests (public datasets, training): run on demand.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  slow:
+    name: Slow tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked --all-extras
+      - run: uv run pytest -m slow
+        env:
+          OPENMIND_DATA_DIR: ${{ runner.temp }}/openmind-data
