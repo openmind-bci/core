@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/openmind-bci/core/blob/main/protocol/schemas/v1/status.schema.json",
+  "title": "OpenMind decoder status",
+  "description": "Heartbeat of the decoder, published on openmind/v1/status at least every 0.5 s (2 Hz). Real objects must stop when no status arrived for 2 s, or when state is not running.",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1,
+      "description": "Major protocol version."
+    },
+    "state": {
+      "enum": [
+        "idle",
+        "calibrating",
+        "running",
+        "degraded"
+      ],
+      "description": "Only running allows objects to move."
+    },
+    "ts": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Unix time in seconds (UTC) when the message was created."
+    },
+    "model": {
+      "type": "string",
+      "description": "Name of the decoding model in use (empty if none)."
+    },
+    "user": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^P[0-9]{2,}$",
+          "description": "Pseudonymous user id (P01, P02...)."
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Current user, or null when no profile is loaded."
+    },
+    "assistance": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Optional. Share of help given during guided calibration (1 = fully assisted, 0 = none)."
+    },
+    "message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Optional human-readable detail, e.g. why the decoder is degraded."
+    }
+  },
+  "required": [
+    "v",
+    "state",
+    "ts",
+    "model",
+    "user"
+  ],
+  "additionalProperties": true
+}

@@ -9,6 +9,16 @@ are listed under their own heading.
 
 ## [Unreleased]
 
+### Protocol 1.0.0 (`openmind-protocol`)
+
+- JSON Schemas v1 for `command`, `status`, `marker`, `event`, `score` and
+  `bandpower`, with valid and invalid examples.
+- Topics `openmind/v1/commands|status|markers|events|score|bandpower`.
+- Validated pydantic models, `encode()` / `decode()` / `decode_topic()` with
+  explicit `ProtocolError`s and rejection of other major versions.
+- `Watchdog` implementing the safety rules for objects (2 s heartbeat timeout,
+  confidence threshold, sequence order). Specification in `docs/protocol.md`.
+
 ### Added
 
 - Repository skeleton: `openmind-core` package with an `openmind-core` command,

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/openmind-bci/core/blob/main/protocol/schemas/v1/command.schema.json",
+  "title": "OpenMind command",
+  "description": "Intent decoded from EEG, published on openmind/v1/commands. Objects must ignore it unless they received a status in the last 2 s and confidence reaches their own threshold.",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1,
+      "description": "Major protocol version."
+    },
+    "command": {
+      "enum": [
+        "left",
+        "right",
+        "forward",
+        "rest",
+        "action"
+      ],
+      "description": "left/right hand, forward (feet), rest, action (double blink: an eye signal, not a brain signal)."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Probability of the command, after evidence accumulation."
+    },
+    "ts": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Unix time in seconds (UTC) when the message was created."
+    },
+    "user": {
+      "type": "string",
+      "pattern": "^P[0-9]{2,}$",
+      "description": "Pseudonymous user id (P01, P02...)."
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Message counter of the publisher, +1 per command message; lets objects detect losses and reordering."
+    }
+  },
+  "required": [
+    "v",
+    "command",
+    "confidence",
+    "ts",
+    "user",
+    "seq"
+  ],
+  "additionalProperties": true
+}

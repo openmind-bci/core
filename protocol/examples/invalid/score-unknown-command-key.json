@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "ts": 1763478000.25,
+  "user": "P03",
+  "overall": 0.78,
+  "ready": true,
+  "per_command": {
+    "jump": 0.5
+  },
+  "false_start_rate": 0.06,
+  "stable_blocks": 2,
+  "ece": 0.04
+}

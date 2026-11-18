@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/openmind-bci/core/blob/main/protocol/schemas/v1/bandpower.schema.json",
+  "title": "OpenMind band power",
+  "description": "Power per electrode and band, published on openmind/v1/bandpower at about 10 Hz for the 3D brain view and quality monitoring.",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1,
+      "description": "Major protocol version."
+    },
+    "ts": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Unix time in seconds (UTC) when the message was created."
+    },
+    "user": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^P[0-9]{2,}$",
+          "description": "Pseudonymous user id (P01, P02...)."
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "srate_hz": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "bands": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "number",
+            "minimum": 0
+          },
+          {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        ],
+        "minItems": 2,
+        "maxItems": 2
+      },
+      "description": "Band name → [low, high] in Hz, e.g. {\"mu\": [8, 13]}."
+    },
+    "channels": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "alpha": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "mu": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "beta": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "rel_mu": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Relative change from the resting baseline (negative = desynchronization), null without baseline."
+          },
+          "rel_beta": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "false for an absent, flat or saturated channel (its values may be null)."
+          }
+        },
+        "required": [
+          "label",
+          "alpha",
+          "mu",
+          "beta",
+          "rel_mu",
+          "rel_beta",
+          "ok"
+        ],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "v",
+    "ts",
+    "user",
+    "srate_hz",
+    "bands",
+    "channels"
+  ],
+  "additionalProperties": true
+}

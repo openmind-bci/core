@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "object": "robot",
+  "kind": "telemetry",
+  "data": [
+    1,
+    2
+  ],
+  "ts": 1763478000.25
+}

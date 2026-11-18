@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/openmind-bci/core/blob/main/protocol/schemas/v1/score.schema.json",
+  "title": "OpenMind progress score",
+  "description": "Progress of a user, published on openmind/v1/score after each evaluation block.",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1,
+      "description": "Major protocol version."
+    },
+    "ts": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Unix time in seconds (UTC) when the message was created."
+    },
+    "user": {
+      "type": "string",
+      "pattern": "^P[0-9]{2,}$",
+      "description": "Pseudonymous user id (P01, P02...)."
+    },
+    "overall": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Overall score, 0 to 1."
+    },
+    "ready": {
+      "type": "boolean",
+      "description": "Whether every threshold is met (user can drive real objects)."
+    },
+    "per_command": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "left",
+          "right",
+          "forward",
+          "rest",
+          "action"
+        ]
+      },
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "description": "Accuracy per command, 0 to 1."
+    },
+    "false_start_rate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Share of rest periods where a command was wrongly emitted."
+    },
+    "stable_blocks": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Consecutive blocks meeting the thresholds."
+    },
+    "ece": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Optional expected calibration error of the probabilities."
+    }
+  },
+  "required": [
+    "v",
+    "ts",
+    "user",
+    "overall",
+    "ready",
+    "per_command",
+    "false_start_rate",
+    "stable_blocks"
+  ],
+  "additionalProperties": true
+}

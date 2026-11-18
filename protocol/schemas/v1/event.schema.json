@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/openmind-bci/core/blob/main/protocol/schemas/v1/event.schema.json",
+  "title": "OpenMind object event",
+  "description": "Telemetry or event of an object, published on openmind/v1/events. data is free-form and typed by (object, kind).",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1,
+      "description": "Major protocol version."
+    },
+    "object": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Object id, e.g. robot, twin, bird."
+    },
+    "kind": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Event kind, e.g. telemetry, collision, stopped."
+    },
+    "data": {
+      "type": "object"
+    },
+    "ts": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Unix time in seconds (UTC) when the message was created."
+    }
+  },
+  "required": [
+    "v",
+    "object",
+    "kind",
+    "data",
+    "ts"
+  ],
+  "additionalProperties": true
+}

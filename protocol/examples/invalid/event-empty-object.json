@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "object": "",
+  "kind": "telemetry",
+  "data": {
+    "speed_mps": 0.12,
+    "battery": 0.81
+  },
+  "ts": 1763478000.25
+}

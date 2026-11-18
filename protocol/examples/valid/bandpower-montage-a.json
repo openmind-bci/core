@@ -1,0 +1,58 @@
+{
+  "v": 1,
+  "ts": 1763478000.25,
+  "user": "P03",
+  "srate_hz": 250,
+  "bands": {
+    "alpha": [
+      8,
+      12
+    ],
+    "mu": [
+      8,
+      13
+    ],
+    "beta": [
+      13,
+      30
+    ]
+  },
+  "channels": [
+    {
+      "label": "C3",
+      "alpha": 9.92,
+      "mu": 12.4,
+      "beta": 4.13,
+      "rel_mu": -0.05,
+      "rel_beta": -0.03,
+      "ok": true
+    },
+    {
+      "label": "Cz",
+      "alpha": 8.08,
+      "mu": 10.1,
+      "beta": 3.37,
+      "rel_mu": 0.02,
+      "rel_beta": 0.01,
+      "ok": true
+    },
+    {
+      "label": "C4",
+      "alpha": 5.04,
+      "mu": 6.3,
+      "beta": 2.1,
+      "rel_mu": -0.42,
+      "rel_beta": -0.21,
+      "ok": true
+    },
+    {
+      "label": "Fp1",
+      "alpha": null,
+      "mu": null,
+      "beta": null,
+      "rel_mu": null,
+      "rel_beta": null,
+      "ok": false
+    }
+  ]
+}

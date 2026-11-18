@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "state": "calibrating",
+  "ts": 1763478000.25,
+  "model": "eegnet-aligned",
+  "user": "P03",
+  "assistance": 2,
+  "message": "block 2 of 4"
+}

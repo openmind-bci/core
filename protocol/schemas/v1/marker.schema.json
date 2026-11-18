@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/openmind-bci/core/blob/main/protocol/schemas/v1/marker.schema.json",
+  "title": "OpenMind marker",
+  "description": "Instruction or event of a calibration scene, published on openmind/v1/markers and relayed to the LSL markers stream.",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1,
+      "description": "Major protocol version."
+    },
+    "type": {
+      "enum": [
+        "cue",
+        "trial_start",
+        "trial_end",
+        "event"
+      ]
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "description": "For cues: the expected command (left, right, forward, rest, action)."
+    },
+    "ts": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Unix time in seconds (UTC) when the message was created."
+    },
+    "trial": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "description": "Trial number from 1, or null outside trials."
+    },
+    "scene": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Scene that emitted the marker, or null."
+    }
+  },
+  "required": [
+    "v",
+    "type",
+    "label",
+    "ts",
+    "trial",
+    "scene"
+  ],
+  "additionalProperties": true
+}

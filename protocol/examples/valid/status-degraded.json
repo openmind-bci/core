@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "state": "degraded",
+  "ts": 1763478000.25,
+  "model": "eegnet-aligned",
+  "user": "P03",
+  "message": "C4 is flat"
+}

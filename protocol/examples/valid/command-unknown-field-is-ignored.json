@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "command": "forward",
+  "confidence": 0.74,
+  "ts": 1763478000.25,
+  "user": "P03",
+  "seq": 43,
+  "latency_ms": 31.5
+}

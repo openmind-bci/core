@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openmind-protocol"
-version = "0.1.0.dev0"
+version = "1.0.0.dev0"
 description = "OpenMind BCI command protocol: MQTT topics, JSON Schemas and validated message models."
 readme = "README.md"
 license = "Apache-2.0"
@@ -29,3 +29,9 @@ Repository = "https://github.com/openmind-bci/core"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/openmind_protocol"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"schemas" = "openmind_protocol/schemas"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "schemas/", "examples/", "tests/", "README.md", "LICENSE"]

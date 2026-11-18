@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "ts": 1763478000.25,
+  "user": null,
+  "srate_hz": 250.0,
+  "bands": {
+    "mu": [
+      8,
+      13
+    ]
+  },
+  "channels": [
+    {
+      "label": "C3",
+      "alpha": 1.0,
+      "mu": 2.5,
+      "beta": 0.7,
+      "rel_mu": null,
+      "rel_beta": null,
+      "ok": true
+    }
+  ]
+}
