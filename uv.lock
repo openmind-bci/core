@@ -2838,6 +2838,7 @@ name = "openmind-core"
 version = "0.1.0.dev0"
 source = { editable = "." }
 dependencies = [
+    { name = "mne" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "openmind-protocol" },
@@ -2872,6 +2873,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "mlflow", marker = "extra == 'research'", specifier = ">=2.14" },
+    { name = "mne", specifier = ">=1.7" },
     { name = "moabb", marker = "extra == 'research'", specifier = ">=1.1" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "openmind-plug", marker = "extra == 'plug'", git = "https://github.com/openmind-bci/plug.git" },
