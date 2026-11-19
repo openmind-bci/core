@@ -57,20 +57,23 @@ MOABB, which keeps the numbers comparable with the literature.
 ## Running the benchmark
 
 ```bash
-uv sync --extra research
-uv run python research/experiments/baselines.py
+uv sync --extra research                    # add --extra deep for deep models
+uv run python research/experiments/benchmark.py --config research/configs/baselines.yaml
+uv run python research/experiments/benchmark.py --config research/configs/deep.yaml
 ```
 
-The configuration (datasets, subjects, classes, pipelines, protocols, seed) is
-in `research/configs/baselines.yaml`. The script:
+A configuration lists the datasets, subjects and classes (`experiments`), the
+`models` (any name accepted by `openmind_core.models.make_model`), their
+training settings (`model_params`), the protocols, the seed, and the deep
+models to pre-train on all subjects (`pretrain`). The script:
 
 - caches preprocessed epochs in `$OPENMIND_DATA_DIR/cache/epochs/`; the cache key
   includes the source code of the loader and of the preprocessing, so changing
   them invalidates the cache;
-- writes the result tables to
-  [`research/results/baselines.md`](../research/results/baselines.md)
-  (committed);
-- logs one MLflow run per experiment, with a nested run per pipeline and
+- writes the result tables to the configuration's `output` file
+  ([`research/results/baselines.md`](../research/results/baselines.md),
+  [`research/results/deep.md`](../research/results/deep.md); committed);
+- logs one MLflow run per experiment, with a nested run per model and
   protocol (parameters, per-subject and mean metrics, Git commit, package
   versions, per-fold scores as CSV), to `$OPENMIND_DATA_DIR/mlflow/`. Browse
   them with:
@@ -78,6 +81,8 @@ in `research/configs/baselines.yaml`. The script:
   ```bash
   uv run mlflow ui --backend-store-uri "sqlite:///$HOME/openmind-data/mlflow/mlflow.db"
   ```
+
+- saves the pre-trained deep models to the local registry (see below).
 
 `--only NAME` runs a single experiment without touching the result file;
 `--no-tracking` skips MLflow.

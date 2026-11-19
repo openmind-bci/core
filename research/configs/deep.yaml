@@ -1,0 +1,55 @@
+# Deep learning vs baselines (CORE-040).
+#
+#   uv sync --extra research --extra deep
+#   uv run python research/experiments/benchmark.py --config research/configs/deep.yaml
+#
+# Takes a few hours on a laptop (leave-one-subject-out trains on every other
+# subject). Results: research/results/deep.md (committed), MLflow runs in
+# $OPENMIND_DATA_DIR/mlflow and pre-trained models in $OPENMIND_DATA_DIR/models
+# (not committed).
+
+name: deep
+title: Deep learning vs baselines
+task: CORE-040
+output: research/results/deep.md
+
+seed: 42
+n_splits: 5
+min_epochs_per_class: 10
+models: [csp-lda, ts-lr, eegnet, shallow]
+protocols: [within-session, cross-session, cross-subject]
+
+# Training settings of the deep models (see openmind_core.models.deep), the
+# same for both networks. Chosen on subjects 1 and 3 of BNCI2014-001 between
+# two settings only: 150 epochs, patience 30, batches of 64 left EEGNet
+# under-trained on a single session (about 90 training epochs).
+# EEGNet trains about 5x faster on Apple MPS than on the CPU, ShallowConvNet
+# about 3x faster on the CPU ("auto" picks CUDA, then MPS, then the CPU).
+# MPS results can differ slightly from run to run.
+model_params:
+  eegnet: {max_epochs: 300, patience: 60, lr: 0.001, batch_size: 32, device: auto}
+  shallow: {max_epochs: 300, patience: 60, lr: 0.001, batch_size: 32, device: cpu}
+
+# Deep models trained on all subjects of each experiment and saved to the
+# registry as <model>-<experiment> (the starting point of fast calibration).
+pretrain: [eegnet, shallow]
+
+experiments:
+  # Left vs right hand: the most common benchmark, comparable with the literature.
+  - name: bnci2014_001-2class
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right]
+
+  # The three OpenMind motor commands: left, right, forward (feet).
+  - name: bnci2014_001-3class
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right, forward]
+
+  # One session per subject: no cross-session score. 20 subjects keep the
+  # download (about 0.5 GB) and the run short.
+  - name: physionetmi-2class
+    dataset: physionetmi
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    classes: [left, right]

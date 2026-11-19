@@ -21,12 +21,18 @@ are listed under their own heading.
 
 ### Added
 
+- Deep decoders EEGNet and ShallowConvNet (`openmind_core.models.deep`, `deep`
+  extra): Braindecode networks behind a scikit-learn interface, trained with
+  early stopping; `make_model()` builds any baseline or deep model by name.
+  Local model registry in `$OPENMIND_DATA_DIR/models` (weights as a
+  `state_dict` plus a JSON card). Benchmark against the baselines in
+  `research/results/deep.md`. PyTorch CPU builds on Linux and Windows.
 - Classical baselines `csp-lda`, `mdm` and `ts-lr` (`openmind_core.models`) and
   evaluation protocols within session, across sessions and leaving one subject
-  out (`openmind_core.evaluation`). `research/experiments/baselines.py` runs the
-  benchmark from `research/configs/baselines.yaml`, writes
-  `research/results/baselines.md` and tracks runs in MLflow. See
-  `docs/evaluation.md`.
+  out (`openmind_core.evaluation`). `research/experiments/benchmark.py` runs a
+  benchmark from a YAML configuration (`research/configs/baselines.yaml`),
+  writes the result tables to `research/results/` and tracks runs in MLflow.
+  See `docs/evaluation.md`.
 - Preprocessing shared by offline and online decoding: causal 8-30 Hz band-pass
   and notch (`StreamFilter`, identical at once or block by block), 2 s epochs
   from cue + 0.5 s, 2 s sliding windows every 250 ms, 150 µV amplitude rejection.
