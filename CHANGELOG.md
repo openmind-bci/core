@@ -21,6 +21,12 @@ are listed under their own heading.
 
 ### Added
 
+- Classical baselines `csp-lda`, `mdm` and `ts-lr` (`openmind_core.models`) and
+  evaluation protocols within session, across sessions and leaving one subject
+  out (`openmind_core.evaluation`). `research/experiments/baselines.py` runs the
+  benchmark from `research/configs/baselines.yaml`, writes
+  `research/results/baselines.md` and tracks runs in MLflow. See
+  `docs/evaluation.md`.
 - Preprocessing shared by offline and online decoding: causal 8-30 Hz band-pass
   and notch (`StreamFilter`, identical at once or block by block), 2 s epochs
   from cue + 0.5 s, 2 s sliding windows every 250 ms, 150 µV amplitude rejection.
