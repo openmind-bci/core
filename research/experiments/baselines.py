@@ -31,7 +31,7 @@ import yaml
 import openmind_core.datasets.moabb as loader
 import openmind_core.preprocessing as preprocessing
 from openmind_core.datasets import DATASETS, EpochSet, load_epochs
-from openmind_core.evaluation import Score, Summary, evaluate, summarize
+from openmind_core.evaluation import Score, Summary, drop_small_subjects, evaluate, summarize
 from openmind_core.models import make_baseline
 from openmind_core.paths import data_dir
 
@@ -57,7 +57,10 @@ def main() -> None:
     versions = {name: importlib.metadata.version(name) for name in PACKAGES}
     results: list[tuple[dict[str, Any], EpochSet, list[Summary], float]] = []
     for experiment in experiments:
-        epochs = cached_epochs(experiment)
+        epochs, dropped = drop_small_subjects(
+            cached_epochs(experiment), config["min_epochs_per_class"]
+        )
+        experiment = experiment | {"dropped": dropped}
         start = time.perf_counter()
         scores = evaluate(
             epochs,
@@ -159,6 +162,8 @@ def track(
         "n_epochs": len(epochs),
         "seed": config["seed"],
         "n_splits": config["n_splits"],
+        "min_epochs_per_class": config["min_epochs_per_class"],
+        "dropped_subjects": ",".join(map(str, experiment["dropped"])) or "none",
     }
     with mlflow.start_run(run_name=experiment["name"], tags=tags):
         mlflow.log_params(data_params)
@@ -213,12 +218,19 @@ def write_report(
     for experiment, epochs, summaries, elapsed in results:
         spec = DATASETS[experiment["dataset"]]
         chance = 100 / len(experiment["classes"])
+        dropped = experiment["dropped"]
+        excluded = (
+            f" Subjects {', '.join(map(str, dropped))} excluded (fewer than "
+            f"{config['min_epochs_per_class']} epochs per class after rejection)."
+            if dropped
+            else ""
+        )
         lines += [
             f"## {experiment['name']}",
             "",
             f"{spec.description} Subjects {format_subjects(experiment['subjects'])}, "
             f"classes {', '.join(experiment['classes'])} (chance {chance:.0f} %), "
-            f"{len(epochs)} epochs after rejection. Evaluation time {elapsed:.0f} s.",
+            f"{len(epochs)} epochs after rejection.{excluded} Evaluation time {elapsed:.0f} s.",
             "",
             "| Pipeline | " + " | ".join(protocols) + " |",
             "|---|" + "---|" * len(protocols),

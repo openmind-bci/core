@@ -15,6 +15,7 @@ from openmind_core.evaluation import (
     WITHIN_SESSION,
     cross_session,
     cross_subject,
+    drop_small_subjects,
     evaluate,
     summarize,
     within_session,
@@ -182,6 +183,30 @@ def test_summarize_weighs_subjects_equally() -> None:
         per_subject = [np.mean([s.accuracy for s in own if s.subject == k]) for k in (1, 2, 3)]
         assert summary.accuracy_mean == pytest.approx(np.mean(per_subject))
         assert summary.accuracy_std == pytest.approx(np.std(per_subject, ddof=1))
+
+
+def test_drop_small_subjects() -> None:
+    epochs = synthetic_epochs(subjects=(1, 2, 3), sessions=("0",), per_class=12)
+    # Subject 2 keeps only 4 "left" epochs; subject 3 loses "forward" entirely.
+    keep = ~(
+        ((epochs.subject == 2) & (epochs.y == "left") & (np.arange(len(epochs)) % 12 >= 4))
+        | ((epochs.subject == 3) & (epochs.y == "forward"))
+    )
+    remaining, dropped = drop_small_subjects(epochs.select(keep), min_per_class=10)
+    assert dropped == [2, 3]
+    assert remaining.subjects == (1,)
+    assert len(remaining) == 36
+
+
+@pytest.mark.filterwarnings("ignore:A single label was found:UserWarning")
+@pytest.mark.filterwarnings("ignore::sklearn.exceptions.UndefinedMetricWarning")
+def test_summarize_ignores_undefined_kappa() -> None:
+    epochs = synthetic_epochs(subjects=(1, 2, 3), sessions=("0",))
+    lone = (epochs.subject != 3) | (epochs.y == "left")  # subject 3: a single class
+    scores = cross_subject(epochs.select(lone), lambda: make_baseline("ts-lr"), "ts-lr")
+    assert np.isnan(scores[2].kappa)
+    (summary,) = summarize(scores, n_classes=3)
+    assert np.isfinite(summary.kappa_mean)
 
 
 @pytest.mark.slow

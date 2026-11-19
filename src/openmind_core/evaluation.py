@@ -59,7 +59,8 @@ class Score:
         n_test: Number of tested epochs.
         accuracy: Fraction of correct predictions.
         balanced_accuracy: Mean recall over classes (robust to imbalance).
-        kappa: Cohen's kappa, 0 at chance level (BCI Competition IV metric).
+        kappa: Cohen's kappa, 0 at chance level (BCI Competition IV metric);
+            ``nan`` when a single class is tested.
     """
 
     pipeline: str
@@ -88,6 +89,26 @@ class Summary:
     accuracy_std: float
     kappa_mean: float
     chance: float
+
+
+def drop_small_subjects(epochs: EpochSet, min_per_class: int) -> tuple[EpochSet, list[int]]:
+    """Remove subjects with fewer than ``min_per_class`` epochs in some class.
+
+    Heavy artifact rejection can leave a subject with a handful of epochs, or a
+    single class, whose scores mean nothing. Dropping them before evaluation
+    keeps every protocol on the same subjects.
+
+    Returns:
+        The remaining epochs and the dropped subjects.
+    """
+    dropped = []
+    for subject in epochs.subjects:
+        counts = epochs.select(epochs.subject == subject).counts()
+        if any(counts.get(label, 0) < min_per_class for label in epochs.classes):
+            dropped.append(subject)
+    if dropped:
+        logger.warning("drop subjects %s: fewer than %d epochs per class", dropped, min_per_class)
+    return epochs.select(~np.isin(epochs.subject, dropped)), dropped
 
 
 def within_session(
@@ -223,7 +244,7 @@ def summarize(scores: Iterable[Score], n_classes: int) -> list[Summary]:
     summaries: list[Summary] = []
     for (pipeline, protocol), by_subject in groups.items():
         accuracy = np.array([np.mean([s.accuracy for s in v]) for v in by_subject.values()])
-        kappa = np.array([np.mean([s.kappa for s in v]) for v in by_subject.values()])
+        kappa = np.array([_nanmean([s.kappa for s in v]) for v in by_subject.values()])
         summaries.append(
             Summary(
                 pipeline=pipeline,
@@ -231,12 +252,19 @@ def summarize(scores: Iterable[Score], n_classes: int) -> list[Summary]:
                 n_subjects=len(by_subject),
                 accuracy_mean=float(accuracy.mean()),
                 accuracy_std=float(accuracy.std(ddof=1)) if len(accuracy) > 1 else 0.0,
-                kappa_mean=float(kappa.mean()),
+                kappa_mean=_nanmean(kappa.tolist()),
                 chance=1.0 / n_classes,
             )
         )
     order = {protocol: i for i, protocol in enumerate(PROTOCOLS)}
     return sorted(summaries, key=lambda s: (order.get(s.protocol, len(order)), s.pipeline))
+
+
+def _nanmean(values: Sequence[float]) -> float:
+    """Mean of the finite values, ``nan`` if there are none (without a warning)."""
+    finite = np.asarray(values, dtype=np.float64)
+    finite = finite[np.isfinite(finite)]
+    return float(finite.mean()) if finite.size else float("nan")
 
 
 def _sessions(epochs: EpochSet) -> list[str]:
