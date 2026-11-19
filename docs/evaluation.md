@@ -81,3 +81,40 @@ in `research/configs/baselines.yaml`. The script:
 
 `--only NAME` runs a single experiment without touching the result file;
 `--no-tracking` skips MLflow.
+
+## Results (baselines)
+
+Full tables: [`research/results/baselines.md`](../research/results/baselines.md).
+Mean accuracy over subjects, 7 decoding channels, 2 s epochs:
+
+| Dataset, classes | Best within-session | Best cross-session | Best cross-subject | Chance |
+|---|---|---|---|---|
+| BNCI2014-001, left/right (9 subjects) | 76.8 % (`csp-lda`) | 74.8 % (`csp-lda`) | 72.3 % (`ts-lr`) | 50 % |
+| BNCI2014-001, left/right/forward (9 subjects) | 68.3 % (`csp-lda`) | 65.6 % (`csp-lda`) | 53.2 % (`csp-lda`) | 33 % |
+| PhysionetMI, left/right (16 of subjects 1-20) | 60.5 % (`csp-lda`) | n/a (one session) | 63.1 % (`csp-lda`) | 50 % |
+
+What these numbers say:
+
+- **Orders of magnitude match the literature.** Published MOABB benchmarks
+  report roughly 80-85 % within-session for left/right on BNCI2014-001 with all
+  22 electrodes and 3-4 s epochs. OpenMind uses 7 electrodes and 2 s epochs, the
+  constraints of a light headset and of a responsive online decoder; a few
+  points lower is the expected price. As a check, MOABB's own paradigm on
+  subject 1 gives 85 % with 22 channels and 83-87 % with our 7 channels.
+- **Subjects differ a lot** (standard deviation around 15 points): some reach
+  90 %, others stay near chance. This is the well-known variability of motor
+  imagery, and the reason why calibration and progress feedback matter.
+- **The `forward` (feet) class costs about 9 points** within-session, and much
+  more across subjects: feet imagery is weaker and less lateralized.
+- **A new user without calibration loses 4-15 points** compared with a
+  calibrated one (cross-subject vs within-session on BNCI2014-001). Closing this
+  gap with a few minutes of data is the goal of `CORE-050` and `CORE-060`.
+- **`mdm` collapses across subjects** (61 % and 43 %): every head shifts the
+  covariance matrices, and MDM compares them directly. Riemannian re-centering
+  (`CORE-050`) targets exactly this.
+- **On PhysionetMI, other people's data beats a short calibration**: with about
+  35 epochs per subject, cross-subject training (on about 600 epochs) does as
+  well as or better than within-session training. Little personal data plus a lot
+  of pooled data is the case for transfer learning.
+- PhysionetMI is noisier: the 150 µV rejection leaves subjects 9, 13, 15 and 17
+  with fewer than 10 epochs per class, so they are excluded from every protocol.
