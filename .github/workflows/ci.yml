@@ -21,7 +21,8 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
-      - run: uv sync --locked
+      # Deep extra so that mypy checks the torch code against real types.
+      - run: uv sync --locked --extra deep
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run mypy
@@ -52,6 +53,17 @@ jobs:
           python-version: "3.12"
       - run: uv sync --locked --extra research --extra plug
       - run: uv run pytest -m "not slow"
+
+  test-deep:
+    name: Tests with the deep extra (CPU)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked --extra deep
+      - run: uv run pytest -m "not slow" tests/test_deep.py
 
   build:
     name: Build distributions
