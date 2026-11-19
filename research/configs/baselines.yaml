@@ -1,17 +1,22 @@
 # Baselines benchmark (CORE-030).
 #
 #   uv sync --extra research
-#   uv run python research/experiments/baselines.py
+#   uv run python research/experiments/benchmark.py --config research/configs/baselines.yaml
 #
 # Results: research/results/baselines.md (committed) and MLflow runs in
 # $OPENMIND_DATA_DIR/mlflow (not committed).
+
+name: baselines        # MLflow experiment
+title: Baselines       # title of the result file
+task: CORE-030
+output: research/results/baselines.md
 
 seed: 42
 n_splits: 5
 # Subjects left with fewer epochs per class after artifact rejection are
 # excluded from every protocol.
 min_epochs_per_class: 10
-pipelines: [csp-lda, mdm, ts-lr]
+models: [csp-lda, mdm, ts-lr]
 protocols: [within-session, cross-session, cross-subject]
 
 experiments:
