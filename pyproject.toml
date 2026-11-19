@@ -24,8 +24,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
     "Typing :: Typed",
 ]
-# Heavier dependencies (mne, pyriemann, scikit-learn, torch, braindecode) are added
-# by the tasks that use them.
+# Deep-learning dependencies (torch, braindecode) are added by the task that uses them.
 dependencies = [
     "openmind-protocol",
     "numpy>=1.26",
@@ -35,10 +34,16 @@ dependencies = [
     "paho-mqtt>=2.0",
     "typer>=0.12",
     "mne>=1.7",
+    "scikit-learn>=1.4",
+    "pyriemann>=0.6",
 ]
 
 [project.optional-dependencies]
-research = ["moabb>=1.1", "mlflow>=2.14"]
+research = [
+    "moabb>=1.1",
+    "mlflow>=2.14",
+    "pyyaml>=6.0",
+]
 plug = ["openmind-plug"]
 
 [project.scripts]
@@ -84,6 +89,10 @@ extend-include = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "N", "UP", "B", "SIM", "NPY", "RUF"]
+
+[tool.ruff.lint.pep8-naming]
+# Upper-case X for data matrices, as in scikit-learn.
+extend-ignore-names = ["X", "X_*"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["openmind_core", "openmind_protocol"]

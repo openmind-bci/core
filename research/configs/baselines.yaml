@@ -1,0 +1,32 @@
+# Baselines benchmark (CORE-030).
+#
+#   uv sync --extra research
+#   uv run python research/experiments/baselines.py
+#
+# Results: research/results/baselines.md (committed) and MLflow runs in
+# $OPENMIND_DATA_DIR/mlflow (not committed).
+
+seed: 42
+n_splits: 5
+pipelines: [csp-lda, mdm, ts-lr]
+protocols: [within-session, cross-session, cross-subject]
+
+experiments:
+  # Left vs right hand: the most common benchmark, comparable with the literature.
+  - name: bnci2014_001-2class
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right]
+
+  # The three OpenMind motor commands: left, right, forward (feet).
+  - name: bnci2014_001-3class
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right, forward]
+
+  # One session per subject: no cross-session score. 20 subjects keep the
+  # download (about 0.5 GB) and the run short.
+  - name: physionetmi-2class
+    dataset: physionetmi
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    classes: [left, right]
