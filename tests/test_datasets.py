@@ -71,6 +71,24 @@ def test_cue_offset_shifts_epochs() -> None:
     np.testing.assert_allclose(shifted.X[0, :, :250], base.X[0, :, 250:], atol=1e-4)
 
 
+def test_stim_channel_events_take_precedence_over_annotations() -> None:
+    """Like MOABB's BNCI2014-001: trial starts on the stim channel, cues 2 s later."""
+    raw = make_raw()
+    stim = np.zeros((1, raw.n_times))
+    for onset, code in [(3.0, 1), (10.0, 2)]:  # trial starts, 2 s before the annotated cues
+        stim[0, int(onset * raw.info["sfreq"])] = code
+    info = mne.create_info(["STI"], raw.info["sfreq"], "stim")
+    info["line_freq"] = raw.info["line_freq"]
+    raw.add_channels([mne.io.RawArray(stim, info, verbose=False)])
+    kwargs = {"classes": ("left", "right"), "reject_uv": None}
+    from_stim = epochs_from_raw(
+        raw, 1, "0", "test", cue_offset_s=2.0, event_id={"left_hand": 1, "right_hand": 2}, **kwargs
+    )
+    from_annotations = epochs_from_raw(raw, 1, "0", "test", **kwargs)
+    assert from_stim.y.tolist() == ["left", "right"]
+    np.testing.assert_allclose(from_stim.X, from_annotations.X[:2], atol=1e-4)
+
+
 def test_rejection_by_amplitude() -> None:
     raw = make_raw()
     raw._data[4, int(6.5 * 160)] += 500e-6  # spike on Cz in the first epoch

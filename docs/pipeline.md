@@ -38,8 +38,13 @@ only, and the blink detector runs on the live Fp1 channel.
   `StreamFilter` gives identical samples whether a run is filtered at once or
   block by block (tested).
 - **Epochs**: cue onset + 0.5 s to + 2.5 s, which skips the visual evoked response
-  to the cue. MOABB marks BNCI2014-001 trials 2 s before the cue; the loader adds
-  the dataset's `interval[0]` to reach the cue.
+  to the cue. Events are read as MOABB reads them: from the stim channel when
+  the run has one, otherwise from the annotations. The stim channel of
+  BNCI2014-001 marks the start of each trial, 2 s before the cue, so the loader
+  adds the dataset's `interval[0]`. Its annotations, on the other hand, are
+  already on the cue: adding `interval[0]` to them cuts epochs 2 s too late,
+  at the end of the imagery period (left/right accuracy then drops from about
+  85 % to 64 % for subject 1).
 - **Online windows**: `SlidingWindow` keeps the last 2 s and yields a window every
   250 ms, shaped like an offline epoch `(n_channels, n_times)`.
 - **Rejection**: 150 µV peak to peak (after band-pass) on any channel, or any

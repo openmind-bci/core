@@ -131,6 +131,7 @@ def load_epochs(
                         filters=filters,
                         reject_uv=reject_uv,
                         cue_offset_s=cue_offset_s,
+                        event_id=moabb_dataset.event_id,
                     )
                 )
     result = EpochSet.concatenate([s for s in sets if len(s)] or sets[:1])
@@ -150,12 +151,20 @@ def epochs_from_raw(
     reject_uv: float | None = REJECT_PTP_UV,
     cue_offset_s: float = 0.0,
     event_map: Mapping[str, str] = EVENT_TO_COMMAND,
+    event_id: Mapping[str, Any] | None = None,
 ) -> EpochSet:
     """Preprocess one continuous run and cut labelled epochs.
 
-    Events come from the annotations of ``raw``; their names are mapped with
-    ``event_map`` and only ``classes`` are kept. The cue is ``cue_offset_s`` after
-    each annotation (MOABB marks BNCI2014-001 trials 2 s before the cue).
+    Events are read like MOABB reads them: from the stim channel when ``raw``
+    has one and ``event_id`` (event name → stim code) is given, otherwise from
+    the annotations of ``raw``. Their names are mapped with ``event_map`` and
+    only ``classes`` are kept. The cue is ``cue_offset_s`` after each event: the
+    stim channel of BNCI2014-001 marks the start of each trial, 2 s before the
+    cue (the dataset's ``interval[0]``).
+
+    The two sources are not interchangeable: since MOABB 1.x the annotations of
+    BNCI2014-001 are already placed on the cue, so adding ``interval[0]`` to them
+    would cut the epochs 2 s too late.
 
     Raises:
         ValueError: If a channel is missing from the run.
@@ -174,11 +183,10 @@ def epochs_from_raw(
 
     onsets: list[float] = []
     labels: list[str] = []
-    first = run.first_time
-    for onset, description in zip(run.annotations.onset, run.annotations.description, strict=True):
-        command = event_map.get(str(description))
+    for onset, name in _events(raw, event_id):
+        command = event_map.get(name)
         if command is not None and command in classes:
-            onsets.append((onset - first + cue_offset_s) * srate)
+            onsets.append((onset + cue_offset_s) * srate)
             labels.append(command)
     epochs, kept = epochs_at(filtered, onsets, srate, EPOCH_OFFSET_S, WINDOW_S)
     y = np.array(labels, dtype=np.str_)[kept]
@@ -196,6 +204,25 @@ def epochs_from_raw(
         info={"filters": asdict(config), "rejected": int((~mask).sum())},
     )
     return result
+
+
+def _events(raw: mne.io.BaseRaw, event_id: Mapping[str, Any] | None) -> list[tuple[float, str]]:
+    """Events of a run as ``(seconds from the first sample, name)``, in time order."""
+    codes = {code: name for name, code in (event_id or {}).items() if isinstance(code, int)}
+    if codes and len(mne.pick_types(raw.info, meg=False, stim=True)):
+        events = mne.find_events(raw, shortest_event=0, verbose=False)
+        srate = float(raw.info["sfreq"])
+        return [
+            ((int(sample) - raw.first_samp) / srate, codes[int(code)])
+            for sample, _, code in events
+            if int(code) in codes
+        ]
+    return [
+        (float(onset) - raw.first_time, str(description))
+        for onset, description in zip(
+            raw.annotations.onset, raw.annotations.description, strict=True
+        )
+    ]
 
 
 def _spec(dataset: str) -> DatasetSpec:
