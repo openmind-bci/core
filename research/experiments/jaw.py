@@ -52,6 +52,11 @@ CHANNEL_SETS = {
     "Fp1 alone (reference)": ("Fp1",),
 }
 THRESHOLDS_DB = (6.0, 10.0, 15.0, 20.0)
+# Stricter variants: a burst starts at ONSET_DB but must peak above a level and
+# stay short. Deliberate clenches are strong; swallowing is weaker and longer.
+ONSET_DB = 10.0
+STRICT = tuple((peak, duration) for peak in (20.0, 25.0) for duration in (1.0, 0.8))
+DETAIL_DB = 10.0  # threshold of the per-event breakdown
 CLENCHES_PER_BLOCK = 5
 MIN_BURST_S = 0.1
 MERGE_GAP_S = 0.15
@@ -69,6 +74,13 @@ class Run:
     subject: int
     data: dict[str, np.ndarray]
     intervals: dict[str, list[tuple[float, float]]] = field(default_factory=dict)
+    scores: dict[tuple[str, ...], np.ndarray] = field(default_factory=dict)
+
+    def score(self, channels: tuple[str, ...]) -> np.ndarray:
+        """Muscle score of a channel set, computed once."""
+        if channels not in self.scores:
+            self.scores[channels] = muscle_score([self.data[c] for c in channels])
+        return self.scores[channels]
 
     @property
     def minutes(self) -> float:
@@ -183,8 +195,17 @@ def muscle_score(channels: list[np.ndarray]) -> np.ndarray:
     return np.median(np.vstack(ratios), axis=0)
 
 
-def bursts(score: np.ndarray, threshold_db: float) -> list[float]:
-    """Onset times (s) of bursts above the threshold."""
+def bursts(
+    score: np.ndarray,
+    threshold_db: float,
+    min_peak_db: float | None = None,
+    max_duration_s: float | None = None,
+) -> list[float]:
+    """Onset times (s) of bursts above the threshold.
+
+    Optionally keep only bursts that peak above ``min_peak_db`` and last at
+    most ``max_duration_s``.
+    """
     above = score > threshold_db
     # Bridge short gaps, then keep long enough segments.
     above = ndimage.binary_closing(above, structure=np.ones(round(MERGE_GAP_S * SRATE)))
@@ -192,8 +213,13 @@ def bursts(score: np.ndarray, threshold_db: float) -> list[float]:
     onsets = []
     for index in range(1, n + 1):
         where = np.flatnonzero(labels == index)
-        if len(where) >= MIN_BURST_S * SRATE:
-            onsets.append(where[0] / SRATE)
+        if len(where) < MIN_BURST_S * SRATE:
+            continue
+        if min_peak_db is not None and score[where].max() < min_peak_db:
+            continue
+        if max_duration_s is not None and len(where) > max_duration_s * SRATE:
+            continue
+        onsets.append(where[0] / SRATE)
     return onsets
 
 
@@ -217,13 +243,18 @@ def inside(t: float, spans: list[tuple[float, float]], margin: float = 0.0) -> b
     return any(start - margin <= t <= stop + margin for start, stop in spans)
 
 
-def evaluate(runs: list[Run], channels: tuple[str, ...], threshold: float) -> dict[str, float]:
+def evaluate(
+    runs: list[Run],
+    channels: tuple[str, ...],
+    threshold: float,
+    min_peak_db: float | None = None,
+    max_duration_s: float | None = None,
+) -> dict[str, float]:
     hits = expected = extra = false = false_double = 0
     minutes = 0.0
     triggered: dict[str, list[int]] = defaultdict(lambda: [0, 0])  # label -> [hit, total]
     for run in runs:
-        score = run.score_cache.setdefault(channels, muscle_score([run.data[c] for c in channels]))  # type: ignore[attr-defined]
-        onsets = bursts(score, threshold)
+        onsets = bursts(run.score(channels), threshold, min_peak_db, max_duration_s)
         chew = run.intervals.get("chew", [])
         for start, stop in chew:
             n = sum(start - 0.5 <= t <= stop + 0.5 for t in onsets)
@@ -254,8 +285,6 @@ def evaluate(runs: list[Run], channels: tuple[str, ...], threshold: float) -> di
 
 
 def report(runs: list[Run], run_index: int, elapsed: float) -> None:
-    for run in runs:
-        run.score_cache = {}  # type: ignore[attr-defined]
     blocks = sum(len(r.intervals.get("chew", [])) for r in runs)
     lines = [
         "# Jaw clench on motor electrodes",
@@ -266,6 +295,8 @@ def report(runs: list[Run], run_index: int, elapsed: float) -> None:
         f"{CLENCHES_PER_BLOCK} cued clenches, {sum(r.minutes for r in runs):.0f} minutes. "
         "Discussion in `docs/action-gesture.md`.",
         "",
+        "Threshold: a burst starts when the score exceeds it. Strict variants start "
+        f"at {ONSET_DB:.0f} dB but keep only bursts that peak above a level and stay short. "
         "Detected: share of the cued clenches found inside the clench blocks. "
         "Extra: detections beyond five per block. False: detections outside the "
         f"clench blocks (± {MARGIN_S:.0f} s); false double clenches are false `action` "
@@ -280,24 +311,27 @@ def report(runs: list[Run], run_index: int, elapsed: float) -> None:
             "| False double clenches / hour |",
             "|---|---|---|---|---|",
         ]
-        best = None
         for threshold in THRESHOLDS_DB:
             r = evaluate(runs, channels, threshold)
             lines.append(
                 f"| {threshold:.0f} dB | {100 * r['detected']:.0f} % | {r['extra_per_block']:.1f} "
                 f"| {r['false_per_min']:.2f} | {r['false_double_per_hour']:.1f} |"
             )
-            if best is None or abs(threshold - 10.0) < 1e-9:
-                best = (threshold, r)
-        assert best is not None
-        threshold, r = best
+        for peak, duration in STRICT:
+            r = evaluate(runs, channels, ONSET_DB, peak, duration)
+            lines.append(
+                f"| peak ≥ {peak:.0f} dB, ≤ {duration:g} s | {100 * r['detected']:.0f} % "
+                f"| {r['extra_per_block']:.1f} | {r['false_per_min']:.2f} "
+                f"| {r['false_double_per_hour']:.1f} |"
+            )
+        r = evaluate(runs, channels, DETAIL_DB)
         triggered = sorted(
             ((k.split(".", 1)[1], v) for k, v in r.items() if k.startswith("triggered.")),
             key=lambda item: -item[1],
         )
         lines += [
             "",
-            f"Annotated events that trigger at least one false detection, at {threshold:.0f} dB: "
+            f"Annotated events that trigger at least one false detection, at {DETAIL_DB:.0f} dB: "
             + ", ".join(f"{label} {100 * v:.0f} %" for label, v in triggered)
             + ".",
             "",
