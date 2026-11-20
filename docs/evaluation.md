@@ -212,7 +212,8 @@ What these numbers say:
   (about 630 training epochs) and for three classes, it stays level with or
   below the baselines: more subjects are needed for the network to pay off.
 - **ShallowConvNet is the weaker network here**, especially across subjects; it
-  has about ten times more weights than EEGNet, too many for these data sizes.
+  has about 14 500 weights for 7 channels and two classes, against about 2 200
+  for EEGNet: too many for these data sizes.
 - **No model solves the new user.** Across subjects, three-class accuracy stays
   around 50-53 % (chance 33 %): the feet class does not transfer well. Hence
   the next steps: align each user's data (`CORE-050`), then fine-tune the
