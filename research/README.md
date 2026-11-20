@@ -5,6 +5,8 @@ Experiments, benchmarks and notebooks: the data-science side of OpenMind Core.
 - `configs/`: YAML configurations of experiments (seeds, datasets, pipelines).
 - `experiments/`: scripts that run an evaluation and log it to MLflow.
 - `notebooks/`: exploration; committed **without outputs** (nbstripout runs in pre-commit).
+- `notes/`: research notes and literature reviews (for example
+  [`notes/foundation-models.md`](notes/foundation-models.md)).
 
 Rules:
 
