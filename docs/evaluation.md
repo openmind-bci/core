@@ -25,6 +25,65 @@ model = make_baseline("ts-lr").fit(epochs.X, epochs.y)
 model.predict(new_epochs.X)  # "left", "right", "forward"
 ```
 
+## Deep models
+
+With the `deep` extra (`uv sync --extra deep`), `openmind_core.models` also
+builds two Braindecode networks behind the same scikit-learn interface:
+
+| Name | Network | Why it is here |
+|---|---|---|
+| `eegnet` | EEGNet (Lawhern et al., 2018): temporal convolution (0.5 s kernel), depthwise spatial filters, separable convolution | Compact (a few thousand weights), the usual starting point for cross-subject transfer |
+| `shallow` | ShallowConvNet (Schirrmeister et al., 2017): temporal and spatial convolutions, squaring, pooling, log | A learned, end-to-end filter-bank CSP |
+
+```python
+from openmind_core.models import make_model
+
+model = make_model("eegnet", srate=250.0, seed=0).fit(epochs.X, epochs.y)
+model.predict_proba(new_epochs.X)  # columns in the order of model.classes_
+```
+
+Training (`DeepClassifier`) is a small PyTorch loop, kept explicit for the
+fine-tuning of `CORE-060`:
+
+- inputs divided by the per-channel standard deviation of the training set
+  (stored with the model, so live data is scaled the same way);
+- AdamW (learning rate 0.001, weight decay 0.001), cosine schedule, cross-entropy;
+- 20 % of the training epochs held out (stratified) for early stopping: the
+  weights with the lowest validation loss are kept;
+- seeded initialization, split and batches. On Apple MPS, results can still
+  vary slightly from run to run.
+
+The benchmark uses the same recipe for both networks: at most 300 passes,
+patience 60, batches of 32. It was chosen on subjects 1 and 3 of BNCI2014-001,
+between two settings only (150 passes, patience 30 and batches of 64 left EEGNet
+under-trained on a single session of about 90 training epochs). These two
+subjects are also part of the evaluation, a small bias to keep in mind.
+
+## Model registry
+
+Trained deep models are saved in `$OPENMIND_DATA_DIR/models/<name>/`, never in
+Git:
+
+| File | Content |
+|---|---|
+| `weights.pt` | the network's `state_dict` only, read back with `torch.load(weights_only=True)` (no pickled code is ever executed) |
+| `card.json` | architecture, channels, sampling rate, epoch length, classes, input scale, training settings, training data and benchmark scores, OpenMind version, date |
+
+```python
+from openmind_core.models.registry import list_models, load_model, save_model
+
+save_model(model, "eegnet-bnci2014_001-2class", epochs.channels, training={...})
+model, card = load_model("eegnet-bnci2014_001-2class")
+[card.name for card in list_models()]
+```
+
+The benchmark pre-trains every model listed under `pretrain` on all subjects of
+each experiment and registers it as `<model>-<experiment>`: these are the
+generic models that fast calibration (`CORE-060`) will start from. Only models
+trained on public data may ever be published (for instance on Hugging Face,
+with a model card built from `card.json`); models fine-tuned on a volunteer's
+data stay on the local machine.
+
 ## Protocols
 
 `openmind_core.evaluation` implements the three MOABB protocols on
@@ -123,3 +182,46 @@ What these numbers say:
   of pooled data is the case for transfer learning.
 - PhysionetMI is noisier: the 150 µV rejection leaves subjects 9, 13, 15 and 17
   with fewer than 10 epochs per class, so they are excluded from every protocol.
+
+## Results (deep learning vs baselines)
+
+Full tables: [`research/results/deep.md`](../research/results/deep.md). Same
+epochs, protocols and seed as the baselines (whose numbers are reproduced
+exactly). Mean accuracy over subjects:
+
+| Dataset, classes | Protocol | `csp-lda` | `ts-lr` | `eegnet` | `shallow` |
+|---|---|---|---|---|---|
+| BNCI2014-001, left/right | within-session | **76.8** | 74.8 | 68.6 | 68.9 |
+| | cross-session | **74.8** | 73.2 | 68.4 | 69.5 |
+| | cross-subject | 68.8 | 72.3 | **73.7** | 67.8 |
+| BNCI2014-001, left/right/forward | within-session | **68.3** | 67.8 | 61.4 | 61.5 |
+| | cross-session | **65.6** | 64.9 | 62.4 | 60.2 |
+| | cross-subject | **53.2** | 52.2 | 52.8 | 49.7 |
+| PhysionetMI, left/right | within-session | **60.5** | 58.7 | 52.4 | 56.5 |
+| | cross-subject | **63.1** | 62.8 | 59.6 | 53.0 |
+
+What these numbers say:
+
+- **With little data, the classical decoders win.** Within a session there are
+  about 115 (two classes) to 170 (three classes) training epochs: the networks
+  lose 6 to 8 points to CSP + LDA. This matches the literature, where deep
+  models only match or beat Riemannian and CSP pipelines with enough data.
+- **With more data, EEGNet catches up.** Trained on the other eight BNCI
+  subjects (about 2 300 epochs), EEGNet is the best cross-subject decoder for
+  left/right (73.7 %), with the smallest spread between subjects. On PhysionetMI
+  (about 630 training epochs) and for three classes, it stays level with or
+  below the baselines: more subjects are needed for the network to pay off.
+- **ShallowConvNet is the weaker network here**, especially across subjects; it
+  has about ten times more weights than EEGNet, too many for these data sizes.
+- **No model solves the new user.** Across subjects, three-class accuracy stays
+  around 50-53 % (chance 33 %): the feet class does not transfer well. Hence
+  the next steps: align each user's data (`CORE-050`), then fine-tune the
+  pre-trained EEGNet on a few minutes of calibration (`CORE-060`). The registry
+  already holds the generic models to start from.
+- These results use one training recipe for both networks, chosen on two
+  subjects; a proper hyper-parameter search (nested, on training subjects only)
+  could narrow the gap within a session, but would not change the picture with
+  so few epochs.
+- Running time: about 50 minutes for left/right on BNCI2014-001 on a laptop
+  (EEGNet on Apple MPS, ShallowConvNet on the CPU). The 176 minutes reported for
+  three classes include a pause of the run, not computing time.
