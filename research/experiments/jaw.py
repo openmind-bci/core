@@ -316,18 +316,18 @@ def evaluate_detector(
 def detector_section(runs: list[Run]) -> list[str]:
     """Rows for the detector of openmind_core, default and study settings."""
     variants = {
-        "default settings (50 ms envelope, 50 ms merge gap)": JawConfig(),
-        "study settings (100 ms envelope, 150 ms merge gap)": JawConfig(
-            power_window_s=0.1, merge_gap_s=0.15
+        "default settings (100 ms envelope, 150 ms merge gap)": JawConfig(),
+        "finer settings, not kept (50 ms envelope, 50 ms merge gap)": JawConfig(
+            power_window_s=0.05, merge_gap_s=0.05
         ),
     }
     lines = [
         "## Detector of openmind_core",
         "",
         "`openmind_core.preprocessing.JawClenchDetector` (causal, block by block) on the "
-        "7 motor electrodes: onset 10 dB, peak ≥ 20 dB, burst ≤ 1 s. Its default "
-        "envelope and merge gap are shorter than in the study above, so that the two "
-        "clenches of a double clench separated by a 0.2-0.3 s release are not merged.",
+        "7 motor electrodes: onset 10 dB, peak ≥ 20 dB, burst ≤ 1 s, the settings of the "
+        "study above. Finer settings would split double clenches with a release "
+        "shorter than 0.3 s, but also split other artifacts into pairs.",
         "",
         "| Settings | Clenches detected | Extra / block | False / min "
         "| False double clenches / hour |",

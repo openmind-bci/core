@@ -22,6 +22,12 @@ blocks):
 5. a **double clench** is two clench onsets ``min_gap_s`` to ``max_gap_s``
    apart; the detector then ignores clenches for ``refractory_s``.
 
+**The gesture**: clench for about 0.2-0.4 s, release for at least 0.3 s, clench
+again. A shorter release merges the two bursts into one (the 100 ms envelope and
+the 150 ms merge gap smooth over it): shorter settings would split them, but
+also split other artifacts into pairs (2.2 instead of 0.6 false double clenches
+per hour on held-out public recordings).
+
 A clench is only known when its burst ends, so a double clench is reported
 about 0.15 s after the end of the second burst. While a burst is in progress,
 :attr:`JawClenchDetector.active` is true: muscle activity also contaminates the
@@ -42,19 +48,19 @@ FloatArray = npt.NDArray[np.float64]
 
 @dataclass(frozen=True)
 class JawConfig:
-    """Settings of :class:`JawClenchDetector` (defaults from ``docs/action-gesture.md``)."""
+    """Settings of :class:`JawClenchDetector` (defaults validated in ``docs/action-gesture.md``)."""
 
     low_hz: float = 30.0
     high_hz: float = 110.0
     line_hz: float = 50.0
-    power_window_s: float = 0.05
+    power_window_s: float = 0.1
     background_s: float = 10.0
     refresh_s: float = 0.25
     onset_db: float = 10.0
     min_peak_db: float = 20.0
     min_burst_s: float = 0.1
     max_burst_s: float = 1.0
-    merge_gap_s: float = 0.05
+    merge_gap_s: float = 0.15
     min_gap_s: float = 0.25
     max_gap_s: float = 1.2
     refractory_s: float = 1.0

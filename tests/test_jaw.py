@@ -43,6 +43,7 @@ def add_burst(
 
 def add_double(x: np.ndarray, at_s: float, gap_s: float = 0.6, **kwargs: object) -> None:
     """Clench 0.3 s, release 0.3 s, clench again: the documented gesture."""
+    assert gap_s >= 0.6, "the gesture needs a release of at least 0.3 s"
     add_burst(x, at_s, **kwargs)  # type: ignore[arg-type]
     add_burst(x, at_s + gap_s, **kwargs)  # type: ignore[arg-type]
 
@@ -153,7 +154,7 @@ def test_lower_sampling_rates_use_a_narrower_band() -> None:
     srate = 160.0
     x = signal.resample_poly(background(20), 16, 25, axis=0)
     rng = np.random.default_rng(0)
-    for at in (10.0, 10.6):
+    for at in (10.0, 10.7):  # the slower filters at 160 Hz need a longer release
         start, n = int(at * srate), int(0.3 * srate)
         sos = signal.butter(4, 30.0, btype="highpass", fs=srate, output="sos")
         noise = signal.sosfilt(sos, rng.standard_normal((n, N_CHANNELS)), axis=0)
@@ -168,6 +169,14 @@ def test_invalid_inputs() -> None:
     with pytest.raises(ValueError, match="expected shape"):
         detector.update(np.zeros((10, 3)))
     assert detector.update(np.zeros((0, N_CHANNELS))) == []
+
+
+@pytest.mark.parametrize(("release_s", "expected"), [(0.15, 0), (0.4, 1)])
+def test_release_between_clenches(release_s: float, expected: int) -> None:
+    x = background(20)
+    add_burst(x, 10.0)
+    add_burst(x, 10.3 + release_s)
+    assert len(detect_double_clenches(x, FS)) == expected
 
 
 def test_config_changes_the_rules() -> None:
