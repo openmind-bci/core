@@ -176,3 +176,17 @@ def test_bnci2014_001_subject_1() -> None:
     assert epochs.counts() == {"forward": 144, "left": 144, "right": 144}
     assert sorted(set(epochs.session.tolist())) == ["0train", "1test"]
     assert 5 < float(np.median(np.ptp(epochs.X, axis=2))) < 100
+
+
+@pytest.mark.slow
+def test_iter_runs_gives_continuous_physionet_runs() -> None:
+    pytest.importorskip("moabb")
+    from openmind_core.datasets import iter_runs
+
+    runs = list(iter_runs("physionetmi", [1]))
+    assert runs
+    subject, session, raw = runs[0]
+    assert subject == 1
+    assert isinstance(session, str)
+    assert raw.info["sfreq"] == 160.0
+    assert any(name.rstrip(".").casefold() == "fp1" for name in raw.ch_names)

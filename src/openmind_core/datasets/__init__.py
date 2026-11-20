@@ -9,7 +9,16 @@ from openmind_core.datasets.moabb import (
     MONTAGE_A_MI,
     DatasetSpec,
     epochs_from_raw,
+    iter_runs,
     load_epochs,
 )
 
-__all__ = ["DATASETS", "MONTAGE_A_MI", "DatasetSpec", "EpochSet", "epochs_from_raw", "load_epochs"]
+__all__ = [
+    "DATASETS",
+    "MONTAGE_A_MI",
+    "DatasetSpec",
+    "EpochSet",
+    "epochs_from_raw",
+    "iter_runs",
+    "load_epochs",
+]

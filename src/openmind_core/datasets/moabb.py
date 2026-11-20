@@ -105,12 +105,7 @@ def load_epochs(
         ImportError: If MOABB (``research`` extra) is not installed.
     """
     spec = _spec(dataset)
-    try:
-        import moabb.datasets
-    except ImportError as error:  # pragma: no cover - depends on the environment
-        raise ImportError("loading public datasets needs the research extra (MOABB)") from error
-
-    moabb_dataset = getattr(moabb.datasets, spec.moabb_class)()
+    moabb_dataset = _moabb_dataset(spec)
     cue_offset_s = float(moabb_dataset.interval[0])
     wanted = tuple(classes or spec.default_classes)
     sets: list[EpochSet] = []
@@ -137,6 +132,27 @@ def load_epochs(
     result = EpochSet.concatenate([s for s in sets if len(s)] or sets[:1])
     result.info["rejected"] = sum(int(s.info.get("rejected", 0)) for s in sets)
     return result
+
+
+def iter_runs(dataset: str, subjects: Sequence[int]) -> Iterator[tuple[int, str, mne.io.BaseRaw]]:
+    """Continuous runs of a public dataset, as ``(subject, session, raw)``.
+
+    The runs are returned as MOABB provides them (all channels, volts, original
+    sampling rate), for analyses that need continuous signals, such as blink
+    detection.
+
+    Raises:
+        KeyError: If the dataset is unknown.
+        ImportError: If MOABB (``research`` extra) is not installed.
+    """
+    spec = _spec(dataset)
+    moabb_dataset = _moabb_dataset(spec)
+    with _mne_data_paths(spec.mne_sign):
+        data = moabb_dataset.get_data(subjects=list(subjects))
+    for subject in subjects:
+        for session, runs in sorted(data[subject].items()):
+            for raw in runs.values():
+                yield subject, session, raw
 
 
 def epochs_from_raw(
@@ -223,6 +239,14 @@ def _events(raw: mne.io.BaseRaw, event_id: Mapping[str, Any] | None) -> list[tup
             raw.annotations.onset, raw.annotations.description, strict=True
         )
     ]
+
+
+def _moabb_dataset(spec: DatasetSpec) -> Any:
+    try:
+        import moabb.datasets
+    except ImportError as error:  # pragma: no cover - depends on the environment
+        raise ImportError("loading public datasets needs the research extra (MOABB)") from error
+    return getattr(moabb.datasets, spec.moabb_class)()
 
 
 def _spec(dataset: str) -> DatasetSpec:
