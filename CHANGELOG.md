@@ -23,9 +23,9 @@ are listed under their own heading.
 
 - Montage study (`research/experiments/montage.py`, `docs/montage.md`): CPz is
   the best eighth decoding electrode (small but consistent gain, mostly on
-  `forward`); double blinks cannot be detected reliably on FC3/FC4 without Fp1;
-  spontaneous double blinks (about 47 per hour) make the double blink alone
-  unsafe for `action`. Per-class recall in evaluation scores; `iter_runs()` for
+  `forward`); blinks cannot be detected reliably without Fp1, even with a
+  spatial filter of the eight motor electrodes; spontaneous double blinks
+  (about 47 per hour) rule out the double blink as the `action` gesture. Per-class recall in evaluation scores; `iter_runs()` for
   continuous public recordings.
 - Deep decoders EEGNet and ShallowConvNet (`openmind_core.models.deep`, `deep`
   extra): Braindecode networks behind a scikit-learn interface, trained with

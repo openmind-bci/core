@@ -58,40 +58,55 @@ served as the reference; the same detector then ran on FC3 and FC4.
   to 160 false `action` commands per hour. Requiring FC3 and FC4 to rise together
   (the blink is symmetric) helps a little, not enough.
 
-**Decision**: the double blink stays on **Fp1**. A headset without Fp1 has no
-eye-based `action` command.
+- Combining the **eight motor electrodes** does better, not enough. A spatial
+  filter learned from Fp1-labelled blinks (weights positive at the front,
+  negative at the back, as the blink topography predicts) finds 35 % of the
+  strong blinks when learned on other subjects, 45 % when learned on the user's
+  own first runs, with 10 to 13 false `action` commands per hour. A plain
+  front-minus-back difference does no better than FC3/FC4.
 
-## 3. A problem with the double blink itself
+**Decision**: blinks can only be detected reliably on **Fp1**. With eight motor
+electrodes and no Fp1, the eyes cannot trigger `action`.
+
+## 3. The double blink is not a good command
 
 The study revealed a larger issue: **people double-blink on their own**. Over
 the same recordings, with no instruction to blink, the detector finds 47
 spontaneous double blinks per hour on Fp1 (in an exploratory count per subject:
-median 29 per hour, only 4 of 50 subjects with none). Triple blinks still occur 4 to 8 times per hour. The
-detector had only been validated on synthetic signals without spontaneous
-blinks, where it gave no false detection.
+median 29 per hour, only 4 of 50 subjects with none). Triple blinks still occur
+4 to 8 times per hour. The detector had only been validated on synthetic
+signals without spontaneous blinks, where it gave no false detection.
 
-As specified, `action` would therefore fire on its own every one or two
-minutes. Before it drives a real object, `action` needs one or more of:
+A command must not fire without the user meaning it, so the double blink is
+**set aside as the trigger of `action`**, whatever the headset. `action` keeps
+its meaning in the protocol ("grab", "interact": open a door, pick an object)
+and the protocol does not change; only the gesture behind it is reconsidered.
+Candidates, to be compared before choosing:
 
-- **context**: `action` only acts where it makes sense (in front of a door),
-  which sandbox already plans;
-- **a less natural gesture**: a triple blink, or a long deliberate eye closure;
-- **per-user amplitude calibration**: deliberate blinks are usually much
-  stronger than spontaneous ones, which the calibration session can measure;
-- **confirmation** for actions that matter.
+| Gesture | Signal | For | Against | Measurable |
+|---|---|---|---|---|
+| Double jaw clench | jaw muscle activity (EMG above 30 Hz), on every electrode at once | voluntary, strong, detectable on eight motor electrodes, used by consumer headsets | not a brain signal; talking, chewing and swallowing must not trigger it; the decoder pauses during the clench | with the headset (phase B) |
+| Tongue motor imagery | brain activity (ERD), central | a brain signal, no artifact; a class of BNCI2014-001 | a fourth imagery class lowers the accuracy of the others | now, on public data |
+| Both-hands imagery | brain activity, bilateral | a brain signal; a class of PhysionetMI | close to left and right | now, on public data |
 
-These options need recordings of deliberate blinks, which public
-motor-imagery datasets do not contain; they will be measured with the headset
-(phase B).
+Whatever the gesture, `action` acts only where it makes sense (in front of a
+door: sandbox) and asks for a confirmation before acting on a real object.
+Until the gesture is chosen, the double-blink detector stays in the code, but
+must not drive a real object. The protocol schema, `docs/protocol.md` and the
+README still describe `action` as a double blink: they will be updated once the
+gesture is chosen.
 
 ## Resulting montages
 
-| Headset | Decoding (8) | `action` |
-|---|---|---|
-| 9 channels or more | `FC3, FC4, C3, Cz, C4, CP3, CP4, CPz` | Fp1 |
-| 8 channels (IronBCI-8), choice 1 | the seven of montage A | Fp1 |
-| 8 channels (IronBCI-8), choice 2 | the eight above | none from the eyes |
+With the double blink set aside, Fp1 loses its main purpose, and the eighth
+channel of an 8-channel headset can go to the motor cortex:
 
-Choice 1 keeps `action`; choice 2 gains about a point of accuracy and a few
-points on `forward`. Models trained on the eight decoding electrodes cannot run
-on seven, and the reverse: each choice needs its own set of models.
+| Headset | Decoding | Fp1 |
+|---|---|---|
+| 8 channels (IronBCI-8) | `FC3, FC4, C3, Cz, C4, CP3, CP4, CPz` | absent |
+| 9 channels or more | the same eight | optional (eye artifacts, blink studies) |
+
+The final choice for the IronBCI-8 waits for the `action` gesture: a jaw clench
+or a motor imagery class works on the eight motor electrodes, while an eye
+gesture would need Fp1 back. Models trained on eight electrodes cannot run on
+seven, and the reverse.

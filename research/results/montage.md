@@ -114,11 +114,20 @@ Detector on FC3/FC4: signal (`mean` of the two channels, or `min`, which needs b
 | min | 5 | 30 µV | 20 % | 20 % | 0.41 | 6 % | 5.6 |
 | min | 5 | 50 µV | 18 % | 19 % | 0.28 | 4 % | 2.3 |
 
+Eight motor electrodes combined (`FC3, FC4, C3, Cz, C4, CP3, CP4, CPz`): a spatial filter maximizes the blink against the background (blink topography from the regression of each channel on Fp1, background covariance when Fp1 is below 30 µV) and rescales it to Fp1 units, so the Fp1 detector settings apply unchanged.
+
+| Spatial filter | Blinks ≥ 100 µV found | False detections / min | False double blinks / hour |
+|---|---|---|---|
+| generic (learned on the other subjects), all runs | 35 % | 0.76 | 9.8 |
+| generic, second half of each subject's runs | 36 % | 0.84 | 11.7 |
+| personal (learned on the first half), second half | 45 % | 1.02 | 13.4 |
+
+
 Spontaneous blinking (no instruction to blink in this dataset), from the Fp1 reference: 46.6 double blinks per hour (gaps 0.15-0.8 s); triple blinks 4.0 per hour with gaps up to 0.6 s, 8.1 per hour with gaps up to 0.8 s.
 
 ## Run
 
 - Date: 2026-11-20
-- Code: commit `94f96ec`
+- Code: commit `f85ad8b`
 - Seed 42, 5-fold within-session
 - Versions: openmind-core 0.1.0.dev0, numpy 2.5.5, scipy 1.18.1, mne 1.13.2, moabb 1.7.2, pyriemann 0.12, scikit-learn 1.9.1, torch 2.15.0, braindecode 2.0.0
