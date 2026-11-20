@@ -1,6 +1,6 @@
 # OpenMind protocol
 
-**Version 1.0.0** — MQTT topics prefix `openmind/v1/`, messages field `"v": 1`.
+**Version 1.0.1** — MQTT topics prefix `openmind/v1/`, messages field `"v": 1`.
 
 This document is the contract between the decoder (OpenMind Core) and everything
 that listens to it or talks to it: simulators, the Godot cockpit, the ESP32 robot,
@@ -50,9 +50,11 @@ The key words **MUST**, **SHOULD** and **MAY** are used as in RFC 2119.
 | `seq` | integer ≥ 0 | +1 per command message of this publisher |
 
 The decoder only says what the user intends (`left`), never what an object should
-do with it. `rest` is the default. `action` comes from a **double blink**: an eye
-signal (EOG) captured by the frontal electrode, not a brain signal. It makes the
-interface hybrid, and is documented as such everywhere.
+do with it. `rest` is the default. `action` ("grab", "interact") comes from a **double
+jaw clench**: a muscle signal (EMG) read on the motor electrodes, not a brain
+signal. It makes the interface hybrid, and is documented as such everywhere. The
+double blink first planned fires on its own about 47 times per hour and was set
+aside (`docs/montage.md`, `docs/action-gesture.md`).
 
 ### `status`
 
@@ -171,6 +173,7 @@ entry, then in sandbox.
 | Version | Date | Changes |
 |---|---|---|
 | 1.0.0 | 2026-11-18 | First version. |
+| 1.0.1 | 2026-11-20 | `action` comes from a double jaw clench instead of a double blink (wording only; messages unchanged). |
 
 ## 6. Using the Python package
 

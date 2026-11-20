@@ -17,7 +17,7 @@
         "rest",
         "action"
       ],
-      "description": "left/right hand, forward (feet), rest, action (double blink: an eye signal, not a brain signal)."
+      "description": "left/right hand, forward (feet), rest, action (double jaw clench: a muscle signal, not a brain signal)."
     },
     "confidence": {
       "type": "number",

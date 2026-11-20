@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openmind-protocol"
-version = "1.0.0.dev0"
+version = "1.0.1.dev0"
 description = "OpenMind BCI command protocol: MQTT topics, JSON Schemas and validated message models."
 readme = "README.md"
 license = "Apache-2.0"

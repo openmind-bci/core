@@ -45,7 +45,7 @@ except PackageNotFoundError:  # pragma: no cover - only when running from a raw 
     __version__ = "0.0.0"
 
 #: Version of the protocol specification implemented by this package.
-PROTOCOL_VERSION = "1.0.0"
+PROTOCOL_VERSION = "1.0.1"
 
 __all__ = [
     "COMMANDS",

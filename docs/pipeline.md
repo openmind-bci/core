@@ -28,7 +28,8 @@ only, and the blink detector runs on the live Fp1 channel.
 | Band-pass 8-30 Hz + notch | `StreamFilter` on each continuous run | `StreamFilter` on each block | `preprocessing.filters` |
 | Windows | 2 s epochs, from cue + 0.5 s | 2 s window every 250 ms | `preprocessing.windows` |
 | Artifacts | epochs above 150 µV peak to peak rejected | same rule | `preprocessing.artifacts` |
-| Double blink | — | `DoubleBlinkDetector` on Fp1 | `preprocessing.blink` |
+| Jaw clench (`action`) | — | `JawClenchDetector` on the motor electrodes | `preprocessing.jaw` |
+| Double blink (studies) | — | `DoubleBlinkDetector` on Fp1 | `preprocessing.blink` |
 
 - **Filter**: 4th-order Butterworth band-pass 8-30 Hz (mu and beta rhythms) plus
   a notch (Q = 30) at the power-line frequency of the recording: 50 Hz in Europe
@@ -71,11 +72,21 @@ Downloads go to `$OPENMIND_DATA_DIR/mne_data`; the global MNE configuration is n
 modified. `research/experiments/make_epochs.py` builds and caches epochs for a few
 subjects in `$OPENMIND_DATA_DIR/cache/epochs/`.
 
-## Double blink: an eye signal
+## Jaw clench: a muscle signal
 
-The `action` command comes from a **double blink**, detected on Fp1. A blink is
-the electrical activity of the eyes and eyelids (EOG), not brain activity: this
-makes OpenMind a hybrid EEG + EOG interface, and it must be presented as such.
+The `action` command comes from a **double jaw clench** (clench, release at
+least 0.3 s, clench), detected on the motor electrodes by `JawClenchDetector`:
+muscle activity (EMG), not brain activity, which makes OpenMind a hybrid EEG +
+EMG interface, to be presented as such. Method, validation and the gesture are in
+[action-gesture.md](action-gesture.md). While a muscle burst is in progress, the
+decoder pauses (`JawClenchDetector.active`).
+
+## Double blink: an eye signal (not used for `action`)
+
+The double blink was the first `action` gesture; people do it on their own
+about 47 times per hour, so it was set aside ([montage.md](montage.md)). The
+detector stays available for studies and for headsets with Fp1. A blink is the
+electrical activity of the eyes and eyelids (EOG), not brain activity.
 
 Detection (`DoubleBlinkDetector`, identical offline and block by block):
 

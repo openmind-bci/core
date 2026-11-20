@@ -5,7 +5,7 @@
 
 **The AI core of OpenMind BCI.** Core listens to a standard EEG stream,
 recognizes what the user intends (imagined left hand, right hand, feet, rest,
-or a double blink), and publishes **generic commands** over MQTT. A new user
+or a double jaw clench), and publishes **generic commands** over MQTT. A new user
 should be calibrated in minutes thanks to transfer learning.
 
 > [!WARNING]
@@ -42,7 +42,7 @@ is sandbox): the decoder says `left`, never "turn the robot's wheel".
 | `right` | imagine moving the right hand |
 | `forward` | imagine walking / moving the feet |
 | `rest` | relax (default when nothing is detected) |
-| `action` | double blink: an **eye** signal (EOG), not a brain signal, used as a hybrid switch |
+| `action` | double jaw clench (clench, release at least 0.3 s, clench): a **muscle** signal (EMG), not a brain signal, used as a hybrid switch |
 
 The message format is defined by the **OpenMind protocol**, published from this
 repository as the [`openmind-protocol`](protocol/) package.

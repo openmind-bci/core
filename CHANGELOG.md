@@ -9,6 +9,11 @@ are listed under their own heading.
 
 ## [Unreleased]
 
+### Protocol 1.0.1 (`openmind-protocol`)
+
+- `action` is described as a double jaw clench (a muscle signal) instead of a
+  double blink. Wording only: messages and validation are unchanged.
+
 ### Protocol 1.0.0 (`openmind-protocol`)
 
 - JSON Schemas v1 for `command`, `status`, `marker`, `event`, `score` and
