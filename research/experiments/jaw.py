@@ -17,7 +17,8 @@ the median of these ratios (dB) over the channels, so a clench must raise the
 power on most electrodes at once. A clench is a score above the threshold for
 at least 100 ms; a double clench is two clench onsets 0.25 to 1.2 s apart.
 
-Writes research/results/jaw.md.
+Writes research/results/jaw.md for run 1, where the settings were explored,
+and research/results/jaw-run<N>.md for another run (held-out validation).
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ from scipy import ndimage, signal
 
 from openmind_core.paths import data_dir
 
-RESULTS = ROOT / "research" / "results" / "jaw.md"
+RESULTS_DIR = ROOT / "research" / "results"
 BASE_URL = "https://s3.amazonaws.com/openneuro.org/ds006386"
 SRATE = 250.0
 # The motor electrodes of montage A. CPz, the eighth motor electrode, is the
@@ -347,9 +348,10 @@ def report(runs: list[Run], run_index: int, elapsed: float) -> None:
         + ", ".join(f"{name} {version}" for name, version in package_versions().items()),
         "",
     ]
-    RESULTS.parent.mkdir(parents=True, exist_ok=True)
-    RESULTS.write_text("\n".join(lines))
-    logger.info("results written to %s", RESULTS.relative_to(ROOT))
+    output = RESULTS_DIR / ("jaw.md" if run_index == 1 else f"jaw-run{run_index}.md")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text("\n".join(lines))
+    logger.info("results written to %s", output.relative_to(ROOT))
 
 
 if __name__ == "__main__":
