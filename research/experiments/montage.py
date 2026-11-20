@@ -62,6 +62,9 @@ FC_CONFIGS = tuple(
 MATCH_S = 0.15  # a detection within 150 ms of a reference blink is the same blink
 STRONG_UV = 100.0  # deliberate blinks are typically 100-300 µV on Fp1
 VERY_STRONG_UV = 200.0
+# The eight decoding electrodes of the extended montage (montage A + CPz).
+MOTOR_8 = ("FC3", "FC4", "C3", "Cz", "C4", "CP3", "CP4", "CPz")
+QUIET_UV = 30.0  # Fp1 below this level: no blink, background sample
 
 logger = logging.getLogger("montage")
 
@@ -191,6 +194,10 @@ class BlinkRun:
     fp1_doubles: list[float]
     fc_blinks: dict[tuple[str, float, float], list[float]]  # config -> blink times
     fc_doubles: dict[tuple[str, float, float], list[float]]
+    subject: int = 0
+    srate: float = 0.0
+    motor: np.ndarray | None = None  # MOTOR_8 in the blink band, float32 (8, n)
+    fp1_slow: np.ndarray | None = None
 
 
 def blinks_part() -> tuple[str, dict[str, float]]:
@@ -198,10 +205,12 @@ def blinks_part() -> tuple[str, dict[str, float]]:
     runs: list[BlinkRun] = []
     subjects: set[int] = set()
     for subject, _session, raw in iter_runs("physionetmi", BLINK_SUBJECTS):
-        traces = channel_traces(raw, ("Fp1", "FC3", "FC4"))
+        traces = channel_traces(raw, ("Fp1", *MOTOR_8))
         if traces is None:
             continue
-        runs.append(analyse_run(traces, float(raw.info["sfreq"])))
+        run = analyse_run(traces, float(raw.info["sfreq"]))
+        run.subject = subject
+        runs.append(run)
         subjects.add(subject)
     minutes = sum(r.minutes for r in runs)
     reference = [amp for r in runs for _, amp in r.reference]
@@ -263,6 +272,7 @@ def blinks_part() -> tuple[str, dict[str, float]]:
             f"{key}.false_per_min": false / minutes,
             f"{key}.false_doubles_per_hour": 60 * false_double / minutes,
         }
+    lines += spatial_filter_section(runs)
     hours = minutes / 60
     triples = {
         gap: sum(count_triples([t for t, _ in r.reference], gap) for r in runs)
@@ -297,6 +307,78 @@ def count_triples(times: list[float], max_gap_s: float, min_gap_s: float = 0.15)
         else:
             i += 1
     return count
+
+
+def spatial_filter_section(runs: list[BlinkRun]) -> list[str]:
+    """Blink detection on a spatial filter of the eight motor electrodes."""
+    subjects = sorted({r.subject for r in runs})
+    generic = {s: blink_filter([r for r in runs if r.subject != s]) for s in subjects}
+    personal: dict[int, np.ndarray] = {}
+    second_half: list[BlinkRun] = []
+    for s in subjects:
+        own = [r for r in runs if r.subject == s]
+        half = len(own) // 2
+        if half:
+            personal[s] = blink_filter(own[:half])
+            second_half += own[half:]
+    rows = (
+        ("generic (learned on the other subjects), all runs", runs, generic),
+        ("generic, second half of each subject's runs", second_half, generic),
+        ("personal (learned on the first half), second half", second_half, personal),
+    )
+    lines = [
+        "",
+        "Eight motor electrodes combined (`" + ", ".join(MOTOR_8) + "`): a spatial "
+        "filter maximizes the blink against the background (blink topography from "
+        "the regression of each channel on Fp1, background covariance when Fp1 is "
+        f"below {QUIET_UV:.0f} µV) and rescales it to Fp1 units, so the Fp1 detector "
+        "settings apply unchanged.",
+        "",
+        f"| Spatial filter | Blinks ≥ {STRONG_UV:.0f} µV found | False detections / min "
+        "| False double blinks / hour |",
+        "|---|---|---|---|",
+    ]
+    for label, subset, filters in rows:
+        strong = hit = false = false_double = 0
+        minutes = 0.0
+        for r in subset:
+            assert r.motor is not None
+            detector = DoubleBlinkDetector(r.srate)
+            doubles = detector.update(filters[r.subject] @ r.motor)
+            for t, amp in r.reference:
+                if amp >= STRONG_UV:
+                    strong += 1
+                    hit += any(abs(t - f) <= MATCH_S for f in detector.blinks)
+            false += sum(
+                not any(abs(f - t) <= MATCH_S for t, _ in r.reference) for f in detector.blinks
+            )
+            false_double += sum(
+                not any(abs(f - d) <= MATCH_S for d in r.fp1_doubles) for f in doubles
+            )
+            minutes += r.minutes
+        lines.append(
+            f"| {label} | {pct(hit, strong)} | {false / minutes:.2f} "
+            f"| {60 * false_double / minutes:.1f} |"
+        )
+    return [*lines, ""]
+
+
+def blink_filter(runs: list[BlinkRun]) -> np.ndarray:
+    """Max-SNR spatial filter for blinks, with unit gain on the blink topography."""
+    n = len(MOTOR_8)
+    cross, power = np.zeros(n), 0.0
+    background, count = np.zeros((n, n)), 0
+    for r in runs:
+        assert r.motor is not None and r.fp1_slow is not None
+        motor = r.motor.astype(np.float64)
+        cross += motor @ r.fp1_slow
+        power += float(r.fp1_slow @ r.fp1_slow)
+        quiet = motor[:, np.abs(r.fp1_slow) < QUIET_UV]
+        background += quiet @ quiet.T
+        count += quiet.shape[1]
+    topography = cross / power
+    weights = np.linalg.solve(background / count, topography)
+    return np.asarray(weights / (weights @ topography))
 
 
 def channel_traces(raw: Any, names: tuple[str, ...]) -> dict[str, np.ndarray] | None:
@@ -338,6 +420,9 @@ def analyse_run(traces: dict[str, np.ndarray], srate: float) -> BlinkRun:
         fc_doubles[config] = detector.update(fc if feature == "mean" else fc_min)
         fc_blinks[config] = detector.blinks
     return BlinkRun(
+        srate=srate,
+        motor=np.vstack([blink_band(traces[name], srate) for name in MOTOR_8]).astype(np.float32),
+        fp1_slow=fp1_slow,
         minutes=len(fp1) / srate / 60,
         reference=reference,
         ratios=[r for r in ratios if np.isfinite(r)],
