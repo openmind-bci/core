@@ -21,6 +21,11 @@ are listed under their own heading.
 
 ### Added
 
+- Online jaw clench detector (`openmind_core.preprocessing.JawClenchDetector`,
+  `detect_double_clenches`): causal, same events offline and block by block,
+  flags ongoing muscle activity to pause decoding. Reproduces the public-data
+  study (0.6 false double clench per hour). The gesture: clench, release at
+  least 0.3 s, clench again.
 - Jaw clench study for the `action` gesture (`research/experiments/jaw.py`,
   `docs/action-gesture.md`) on PhysioMotion Artifact (OpenNeuro ds006386): on
   the motor electrodes, a double clench with a strong, short burst gives under

@@ -50,8 +50,17 @@ Annotated events that trigger at least one false detection, at 10 dB: swallow 88
 
 Annotated events that trigger at least one false detection, at 10 dB: swallow 65 %, eyebrow 57 %, blink_ver_headm 42 %, ver_headm 41 %, blink_eyebrow 40 %, swallow_eyebrow 24 %, blink 16 %, blink_hor_headm 7 %, close_base 6 %, tongue_eyebrow 5 %, open_base 5 %, tongue 4 %, hor_headm 2 %, ver_eyem 1 %, hor_eyem 0 %.
 
+## Detector of openmind_core
+
+`openmind_core.preprocessing.JawClenchDetector` (causal, block by block) on the 7 motor electrodes: onset 10 dB, peak ≥ 20 dB, burst ≤ 1 s, the settings of the study above. Finer settings would split double clenches with a release shorter than 0.3 s, but also split other artifacts into pairs.
+
+| Settings | Clenches detected | Extra / block | False / min | False double clenches / hour |
+|---|---|---|---|---|
+| default settings (100 ms envelope, 150 ms merge gap) | 76 % | 0.0 | 0.20 | 0.6 |
+| finer settings, not kept (50 ms envelope, 50 ms merge gap) | 81 % | 0.0 | 0.30 | 0.9 |
+
 ## Run
 
 - Date: 2026-11-20, 0 min
-- Code: commit `fc5bbc6`
+- Code: commit `77a45b1`
 - Versions: openmind-core 0.1.0.dev0, numpy 2.5.5, scipy 1.18.1, mne 1.13.2, moabb 1.7.2, pyriemann 0.12, scikit-learn 1.9.1, torch 2.15.0, braindecode 2.0.0

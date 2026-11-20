@@ -67,6 +67,37 @@ Seven motor electrodes:
   would be recognized on the first try. A user who sees the feedback simply
   repeats, and clenching harder helps (the threshold is on the peak).
 
+## The detector in OpenMind Core
+
+`openmind_core.preprocessing.JawClenchDetector` implements this method causally,
+block by block (same events as offline, tested), with the study's settings:
+
+```python
+from openmind_core.preprocessing import JawClenchDetector
+
+detector = JawClenchDetector(srate=250, n_channels=8)  # the motor electrodes of montage C
+for block in stream:                                   # (n_samples, 8) in µV
+    for t in detector.update(block):                   # double clenches
+        publish_action(t)
+    pause_decoding = detector.active                   # muscle burst in progress
+```
+
+Run on the public recordings, it reproduces the study: 76 % / 68 % of the
+clenches detected and 0.6 false double clench per hour on runs 1 / 2.
+
+**The gesture**: clench for about 0.2-0.4 s, **release for at least 0.3 s**,
+clench again. With a release of 0.3 s, synthetic double clenches are always
+recognized; below 0.2 s the two bursts merge into one. Finer settings (50 ms
+envelope and merge gap) would accept shorter releases, but they also split
+other artifacts into pairs: 2.2 instead of 0.6 false double clenches per hour
+on the held-out run. The calibration session will teach the gesture, with
+feedback.
+
+A double clench is reported about 0.15 s after the end of the second burst.
+While a burst is in progress, `detector.active` is true: the online loop
+(`CORE-080`) pauses decoding meanwhile, since muscle activity also reaches the
+beta band.
+
 ## What remains to check with the headset
 
 - **Real double clenches**, done on purpose, with per-user calibration of the
