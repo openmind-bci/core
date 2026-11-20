@@ -34,7 +34,7 @@ import yaml
 
 import openmind_core.datasets.moabb as loader
 import openmind_core.preprocessing as preprocessing
-from openmind_core.datasets import DATASETS, EpochSet, load_epochs
+from openmind_core.datasets import DATASETS, MONTAGE_A_MI, EpochSet, load_epochs
 from openmind_core.evaluation import (
     Score,
     Summary,
@@ -171,7 +171,13 @@ def cached_epochs(experiment: dict[str, Any]) -> EpochSet:
     The cache key includes the source code of the loader and of the
     preprocessing, so any change to them invalidates the cached epochs.
     """
-    key = json.dumps({k: experiment[k] for k in ("dataset", "subjects", "classes")}, sort_keys=True)
+    channels = list(experiment.get("channels") or MONTAGE_A_MI)
+    key = json.dumps(
+        {k: experiment[k] for k in ("dataset", "subjects", "classes")}
+        # The default montage is left out of the key so existing caches stay valid.
+        | ({"channels": channels} if channels != list(MONTAGE_A_MI) else {}),
+        sort_keys=True,
+    )
     digest_input = key.encode() + source_bytes(loader.__file__)
     for module in sorted(Path(preprocessing.__file__).parent.glob("*.py")):
         digest_input += source_bytes(str(module))
@@ -180,7 +186,9 @@ def cached_epochs(experiment: dict[str, Any]) -> EpochSet:
     if path.exists():
         logger.info("epochs from cache %s", path)
         return EpochSet.load(path)
-    epochs = load_epochs(experiment["dataset"], experiment["subjects"], experiment["classes"])
+    epochs = load_epochs(
+        experiment["dataset"], experiment["subjects"], experiment["classes"], channels=channels
+    )
     epochs.save(path)
     return epochs
 
