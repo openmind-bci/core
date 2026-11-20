@@ -100,14 +100,25 @@ def cache_dir() -> Path:
     return data_dir(create=True) / "datasets" / "ds006386"
 
 
-def fetch(url: str, target: Path) -> Path:
-    if not target.exists():
-        target.parent.mkdir(parents=True, exist_ok=True)
-        logger.info("download %s", url)
-        partial = target.with_suffix(target.suffix + ".part")
-        urllib.request.urlretrieve(url, partial)
-        partial.rename(target)
-    return target
+def fetch(url: str, target: Path, attempts: int = 4) -> Path:
+    """Download once to ``target``, with a socket timeout and retries."""
+    if target.exists():
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    partial = target.with_suffix(target.suffix + ".part")
+    for attempt in range(1, attempts + 1):
+        logger.info("download %s (attempt %d)", url, attempt)
+        try:
+            with urllib.request.urlopen(url, timeout=30) as response, partial.open("wb") as out:
+                while chunk := response.read(1 << 20):
+                    out.write(chunk)
+            partial.rename(target)
+            return target
+        except OSError as error:  # includes timeouts and connection resets
+            logger.warning("download failed: %s", error)
+            partial.unlink(missing_ok=True)
+            time.sleep(5 * attempt)
+    raise OSError(f"could not download {url}")
 
 
 def load_run(subject: int, run: int) -> Run:
