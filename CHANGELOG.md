@@ -26,6 +26,13 @@ are listed under their own heading.
 
 ### Added
 
+- Baselines and deep models retrained on montage C (eight motor electrodes,
+  `research/configs/montage-c.yaml`, `research/results/montage-c.md`): same as
+  montage A for left/right, better at three classes; six pre-trained models
+  `-c` in the registry. Benchmarks now resume from finished experiments and log
+  each evaluation unit.
+- Research note on EEG foundation models and datasets for fast calibration
+  (`research/notes/foundation-models.md`).
 - Online jaw clench detector (`openmind_core.preprocessing.JawClenchDetector`,
   `detect_double_clenches`): causal, same events offline and block by block,
   flags ongoing muscle activity to pause decoding. Reproduces the public-data

@@ -44,6 +44,41 @@ with the seven electrodes alone.
 **Decision**: the eighth motor electrode is **CPz**. The decoding montage
 becomes `FC3, FC4, C3, Cz, C4, CP3, CP4, CPz`.
 
+### Retrained decoders on montage C
+
+All baselines and deep models were retrained on the eight motor electrodes,
+with the same datasets, protocols, seed and training recipe as on montage A
+(full tables: [`research/results/montage-c.md`](../research/results/montage-c.md),
+to compare with [`research/results/deep.md`](../research/results/deep.md)).
+Mean accuracy in %, montage C (montage A):
+
+| Dataset, classes | Protocol | `csp-lda` | `ts-lr` | `eegnet` | `shallow` |
+|---|---|---|---|---|---|
+| BNCI2014-001, left/right | within-session | 77.2 (76.8) | 74.9 (74.8) | 66.4 (68.6) | 68.6 (68.9) |
+| | cross-subject | 67.7 (68.8) | 71.0 (72.3) | 71.9 (73.7) | 67.7 (67.8) |
+| BNCI2014-001, left/right/forward | within-session | **70.2** (68.3) | 69.2 (67.8) | 56.4 (61.4) | 61.3 (61.5) |
+| | cross-session | **67.8** (65.6) | 65.6 (64.9) | 58.5 (62.4) | 61.8 (60.2) |
+| | cross-subject | 53.5 (53.2) | 54.8 (52.2) | **55.0** (52.8) | 50.3 (49.7) |
+| PhysionetMI, left/right | within-session | 60.8 (60.5) | 60.0 (58.7) | 50.9 (52.4) | 50.9 (56.5) |
+| | cross-subject | 62.9 (63.1) | 59.8 (62.8) | 54.4 (59.6) | 51.1 (53.0) |
+
+- **Left/right: no change** (within one or two points), as expected: CPz lies
+  on the midline, over the feet area.
+- **Three classes: the gain is confirmed** for the classical decoders (+1 to
+  +2.6 points, the same numbers as in the study above) and EEGNet becomes the
+  best decoder for a new user (55.0 %).
+- **EEGNet's losses are training failures, not a montage effect.** Within a
+  session (about 170 training epochs), most sessions score the same on both
+  montages, but EEGNet sometimes fails to learn and stays near chance (subject
+  1, first session: 79 % on montage A, 51 % on C; 87 % on C for its second
+  session). On PhysionetMI, with about 35 epochs per subject, the networks are
+  near chance on both montages. Small-data training of deep networks is
+  unstable: fast calibration (`CORE-060`) will start from pre-trained weights,
+  and should average several seeds before drawing conclusions.
+- The six models pre-trained on montage C are in the registry
+  (`<eegnet|shallow>-<experiment>-c`): the starting points of fast calibration
+  for the IronBCI-8.
+
 ## 2. Blinks without Fp1: not reliable
 
 On 617 minutes of PhysionetMI recordings (50 subjects), blinks detected on Fp1
