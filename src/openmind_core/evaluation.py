@@ -23,12 +23,17 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Final
 
 import numpy as np
 import numpy.typing as npt
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, cohen_kappa_score
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    cohen_kappa_score,
+    recall_score,
+)
 from sklearn.model_selection import StratifiedKFold
 
 from openmind_core.datasets.epochs import EpochSet
@@ -61,6 +66,8 @@ class Score:
         balanced_accuracy: Mean recall over classes (robust to imbalance).
         kappa: Cohen's kappa, 0 at chance level (BCI Competition IV metric);
             ``nan`` when a single class is tested.
+        recall: Per-class recall (share of the epochs of a class that are
+            recognized), for the classes present in the test set.
     """
 
     pipeline: str
@@ -72,6 +79,7 @@ class Score:
     accuracy: float
     balanced_accuracy: float
     kappa: float
+    recall: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -89,6 +97,7 @@ class Summary:
     accuracy_std: float
     kappa_mean: float
     chance: float
+    recall_mean: dict[str, float] = field(default_factory=dict)
 
 
 def drop_small_subjects(epochs: EpochSet, min_per_class: int) -> tuple[EpochSet, list[int]]:
@@ -245,6 +254,13 @@ def summarize(scores: Iterable[Score], n_classes: int) -> list[Summary]:
     for (pipeline, protocol), by_subject in groups.items():
         accuracy = np.array([np.mean([s.accuracy for s in v]) for v in by_subject.values()])
         kappa = np.array([_nanmean([s.kappa for s in v]) for v in by_subject.values()])
+        labels = sorted({label for v in by_subject.values() for s in v for label in s.recall})
+        recall = {
+            label: _nanmean(
+                [_nanmean([s.recall.get(label, np.nan) for s in v]) for v in by_subject.values()]
+            )
+            for label in labels
+        }
         summaries.append(
             Summary(
                 pipeline=pipeline,
@@ -254,6 +270,7 @@ def summarize(scores: Iterable[Score], n_classes: int) -> list[Summary]:
                 accuracy_std=float(accuracy.std(ddof=1)) if len(accuracy) > 1 else 0.0,
                 kappa_mean=_nanmean(kappa.tolist()),
                 chance=1.0 / n_classes,
+                recall_mean=recall,
             )
         )
     order = {protocol: i for i, protocol in enumerate(PROTOCOLS)}
@@ -290,4 +307,11 @@ def _score(
         accuracy=float(accuracy_score(y_true, y_pred)),
         balanced_accuracy=float(balanced_accuracy_score(y_true, y_pred)),
         kappa=float(cohen_kappa_score(y_true, y_pred)),
+        recall=_recalls(y_true, y_pred),
     )
+
+
+def _recalls(y_true: npt.NDArray[np.str_], y_pred: npt.NDArray[Any]) -> dict[str, float]:
+    labels = sorted(set(y_true.tolist()))
+    values = recall_score(y_true, y_pred, labels=labels, average=None, zero_division=0)
+    return {str(label): float(value) for label, value in zip(labels, values, strict=True)}

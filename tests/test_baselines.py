@@ -154,6 +154,21 @@ def test_drop_small_subjects() -> None:
     assert len(remaining) == 36
 
 
+def test_scores_report_recall_per_class() -> None:
+    epochs = synthetic_epochs(subjects=(1, 2), sessions=("0",))
+    scores = cross_subject(epochs, lambda: make_baseline("ts-lr"), "ts-lr")
+    for score in scores:
+        assert set(score.recall) == set(CLASSES)
+        assert all(0 <= value <= 1 for value in score.recall.values())
+        # Balanced accuracy is the mean recall over classes.
+        assert np.mean(list(score.recall.values())) == pytest.approx(score.balanced_accuracy)
+    (summary,) = summarize(scores, n_classes=3)
+    for label in CLASSES:
+        assert summary.recall_mean[label] == pytest.approx(
+            np.mean([s.recall[label] for s in scores])
+        )
+
+
 @pytest.mark.filterwarnings("ignore:A single label was found:UserWarning")
 @pytest.mark.filterwarnings("ignore::sklearn.exceptions.UndefinedMetricWarning")
 def test_summarize_ignores_undefined_kappa() -> None:
