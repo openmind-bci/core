@@ -263,8 +263,40 @@ def blinks_part() -> tuple[str, dict[str, float]]:
             f"{key}.false_per_min": false / minutes,
             f"{key}.false_doubles_per_hour": 60 * false_double / minutes,
         }
-    lines.append("")
+    hours = minutes / 60
+    triples = {
+        gap: sum(count_triples([t for t, _ in r.reference], gap) for r in runs)
+        for gap in (0.6, 0.8)
+    }
+    lines += [
+        "",
+        "Spontaneous blinking (no instruction to blink in this dataset), from the Fp1 "
+        f"reference: {fp1_doubles / hours:.1f} double blinks per hour (gaps "
+        f"{BlinkConfig().min_gap_s}-{BlinkConfig().max_gap_s} s); triple blinks "
+        + ", ".join(
+            f"{triples[gap] / hours:.1f} per hour with gaps up to {gap} s" for gap in triples
+        )
+        + ".",
+        "",
+    ]
+    metrics |= {"blinks.fp1_spontaneous_doubles_per_hour": fp1_doubles / hours}
+    metrics |= {
+        f"blinks.fp1_spontaneous_triples_{gap}s_per_hour": n / hours for gap, n in triples.items()
+    }
     return "\n".join(lines), metrics
+
+
+def count_triples(times: list[float], max_gap_s: float, min_gap_s: float = 0.15) -> int:
+    """Non-overlapping runs of three blinks, each gap within the given bounds."""
+    count = i = 0
+    while i + 2 < len(times):
+        gaps = (times[i + 1] - times[i], times[i + 2] - times[i + 1])
+        if all(min_gap_s <= gap <= max_gap_s for gap in gaps):
+            count += 1
+            i += 3
+        else:
+            i += 1
+    return count
 
 
 def channel_traces(raw: Any, names: tuple[str, ...]) -> dict[str, np.ndarray] | None:
