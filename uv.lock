@@ -3016,7 +3016,7 @@ dev = [
 [[package]]
 name = "openmind-plug"
 version = "0.1.0.dev0"
-source = { git = "https://github.com/openmind-bci/plug.git#639aadce74f6d748ac8502809dd529b998542643" }
+source = { git = "https://github.com/openmind-bci/plug.git#ff16390158516f6962d3c87db9529a474c108677" }
 dependencies = [
     { name = "mne" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -3030,7 +3030,7 @@ dependencies = [
 
 [[package]]
 name = "openmind-protocol"
-version = "1.0.0.dev0"
+version = "1.0.1.dev0"
 source = { editable = "protocol" }
 dependencies = [
     { name = "jsonschema" },
