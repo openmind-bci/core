@@ -40,6 +40,7 @@ from benchmark import ROOT, code_version, package_versions
 from scipy import ndimage, signal
 
 from openmind_core.paths import data_dir
+from openmind_core.preprocessing import JawClenchDetector, JawConfig
 
 RESULTS_DIR = ROOT / "research" / "results"
 BASE_URL = "https://s3.amazonaws.com/openneuro.org/ds006386"
@@ -285,6 +286,62 @@ def evaluate(
     return result
 
 
+def evaluate_detector(
+    runs: list[Run], channels: tuple[str, ...], config: JawConfig
+) -> dict[str, float]:
+    """The online detector of openmind_core, run over each recording."""
+    hits = expected = extra = false = false_double = 0
+    minutes = 0.0
+    for run in runs:
+        data = np.column_stack([run.data[c] for c in channels])
+        detector = JawClenchDetector(SRATE, len(channels), config)
+        doubles = detector.update(data)
+        chew = run.intervals.get("chew", [])
+        for start, stop in chew:
+            n = sum(start - 0.5 <= t <= stop + 0.5 for t in detector.clenches)
+            hits += min(n, CLENCHES_PER_BLOCK)
+            extra += max(n - CLENCHES_PER_BLOCK, 0)
+            expected += CLENCHES_PER_BLOCK
+        false += sum(not inside(t, chew, MARGIN_S) for t in detector.clenches)
+        false_double += sum(not inside(t, chew, MARGIN_S + 1.0) for t in doubles)
+        minutes += run.minutes - sum(stop - start + 2 * MARGIN_S for start, stop in chew) / 60
+    return {
+        "detected": hits / max(expected, 1),
+        "extra_per_block": extra / max(expected / CLENCHES_PER_BLOCK, 1),
+        "false_per_min": false / minutes,
+        "false_double_per_hour": 60 * false_double / minutes,
+    }
+
+
+def detector_section(runs: list[Run]) -> list[str]:
+    """Rows for the detector of openmind_core, default and study settings."""
+    variants = {
+        "default settings (50 ms envelope, 50 ms merge gap)": JawConfig(),
+        "study settings (100 ms envelope, 150 ms merge gap)": JawConfig(
+            power_window_s=0.1, merge_gap_s=0.15
+        ),
+    }
+    lines = [
+        "## Detector of openmind_core",
+        "",
+        "`openmind_core.preprocessing.JawClenchDetector` (causal, block by block) on the "
+        "7 motor electrodes: onset 10 dB, peak ≥ 20 dB, burst ≤ 1 s. Its default "
+        "envelope and merge gap are shorter than in the study above, so that the two "
+        "clenches of a double clench separated by a 0.2-0.3 s release are not merged.",
+        "",
+        "| Settings | Clenches detected | Extra / block | False / min "
+        "| False double clenches / hour |",
+        "|---|---|---|---|---|",
+    ]
+    for label, config in variants.items():
+        r = evaluate_detector(runs, MOTOR_7, config)
+        lines.append(
+            f"| {label} | {100 * r['detected']:.0f} % | {r['extra_per_block']:.1f} "
+            f"| {r['false_per_min']:.2f} | {r['false_double_per_hour']:.1f} |"
+        )
+    return [*lines, ""]
+
+
 def report(runs: list[Run], run_index: int, elapsed: float) -> None:
     blocks = sum(len(r.intervals.get("chew", [])) for r in runs)
     lines = [
@@ -337,6 +394,7 @@ def report(runs: list[Run], run_index: int, elapsed: float) -> None:
             + ".",
             "",
         ]
+    lines += detector_section(runs)
     code = code_version()
     dirty = " (with uncommitted changes)" if code["dirty"] == "true" else ""
     lines += [
