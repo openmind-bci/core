@@ -89,4 +89,6 @@ Detection (`DoubleBlinkDetector`, identical offline and block by block):
 Measured on a 15 µV RMS 1/f background: no false detection in 50 minutes;
 double blinks detected 40/40 at 120 µV, 37/40 at 100 µV, 24/40 at 80 µV (real
 blinks are typically 100-300 µV on Fp1). It is also tested on the synthetic
-source of plug.
+source of plug. **On real recordings, people double-blink on their own** (about
+47 times per hour on PhysionetMI): see [montage.md](montage.md) for the
+consequences on the `action` command.
