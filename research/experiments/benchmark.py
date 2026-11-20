@@ -220,7 +220,10 @@ def code_version() -> dict[str, str]:
 
     return {
         "commit": git("rev-parse", "--short", "HEAD") or "unknown",
-        "dirty": "true" if git("status", "--porcelain", "--untracked-files=no") else "false",
+        # Result files are outputs of these scripts: they do not make the code dirty.
+        "dirty": "true"
+        if git("status", "--porcelain", "--untracked-files=no", "--", ".", ":!research/results")
+        else "false",
     }
 
 
