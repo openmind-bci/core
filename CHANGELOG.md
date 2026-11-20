@@ -21,6 +21,11 @@ are listed under their own heading.
 
 ### Added
 
+- Jaw clench study for the `action` gesture (`research/experiments/jaw.py`,
+  `docs/action-gesture.md`) on PhysioMotion Artifact (OpenNeuro ds006386): on
+  the motor electrodes, a double clench with a strong, short burst gives under
+  one false `action` per hour, held-out run included, for about seven clenches
+  in ten detected. Swallowing is the main look-alike.
 - Montage study (`research/experiments/montage.py`, `docs/montage.md`): CPz is
   the best eighth decoding electrode (small but consistent gain, mostly on
   `forward`); blinks cannot be detected reliably without Fp1, even with a

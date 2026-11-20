@@ -106,7 +106,9 @@ channel of an 8-channel headset can go to the motor cortex:
 | 8 channels (IronBCI-8) | `FC3, FC4, C3, Cz, C4, CP3, CP4, CPz` | absent |
 | 9 channels or more | the same eight | optional (eye artifacts, blink studies) |
 
-The final choice for the IronBCI-8 waits for the `action` gesture: a jaw clench
+The jaw clench study ([action-gesture.md](action-gesture.md)) shows that a
+muscle gesture can be read on the motor electrodes alone. Before that, the
+final choice for the IronBCI-8 waited for the `action` gesture: a jaw clench
 or a motor imagery class works on the eight motor electrodes, while an eye
 gesture would need Fp1 back. Models trained on eight electrodes cannot run on
 seven, and the reverse.
