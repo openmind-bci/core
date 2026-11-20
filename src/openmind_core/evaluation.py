@@ -21,6 +21,7 @@ cross-subject score next to a within-session one.
 from __future__ import annotations
 
 import logging
+import time
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -142,6 +143,7 @@ def within_session(
                     "skip subject %s session %s: too few epochs per class", subject, session
                 )
                 continue
+            start = time.perf_counter()
             folds = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
             predicted = np.empty(len(part), dtype=part.y.dtype)
             n_train = 0
@@ -153,6 +155,7 @@ def within_session(
             scores.append(
                 _score(pipeline, WITHIN_SESSION, subject, session, n_train, part.y, predicted)
             )
+            _progress(scores[-1], start)
     return scores
 
 
@@ -169,6 +172,7 @@ def cross_session(epochs: EpochSet, factory: ModelFactory, pipeline: str = "mode
             logger.warning("skip subject %s: a single session", subject)
             continue
         for session in sessions:
+            start = time.perf_counter()
             test = own.session == session
             model = factory()
             model.fit(own.X[~test], own.y[~test])
@@ -184,6 +188,7 @@ def cross_session(epochs: EpochSet, factory: ModelFactory, pipeline: str = "mode
                     predicted,
                 )
             )
+            _progress(scores[-1], start)
     return scores
 
 
@@ -194,6 +199,7 @@ def cross_subject(epochs: EpochSet, factory: ModelFactory, pipeline: str = "mode
         return []
     scores: list[Score] = []
     for subject in epochs.subjects:
+        start = time.perf_counter()
         test = epochs.subject == subject
         model = factory()
         model.fit(epochs.X[~test], epochs.y[~test])
@@ -209,6 +215,7 @@ def cross_subject(epochs: EpochSet, factory: ModelFactory, pipeline: str = "mode
                 predicted,
             )
         )
+        _progress(scores[-1], start)
     return scores
 
 
@@ -282,6 +289,19 @@ def _nanmean(values: Sequence[float]) -> float:
     finite = np.asarray(values, dtype=np.float64)
     finite = finite[np.isfinite(finite)]
     return float(finite.mean()) if finite.size else float("nan")
+
+
+def _progress(score: Score, start: float) -> None:
+    """Log one finished evaluation unit, so long runs show their progress."""
+    logger.info(
+        "%s %s subject %s session %s: %.1f %% in %.0f s",
+        score.pipeline,
+        score.protocol,
+        score.subject,
+        score.session,
+        100 * score.accuracy,
+        time.perf_counter() - start,
+    )
 
 
 def _sessions(epochs: EpochSet) -> list[str]:
