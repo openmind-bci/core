@@ -66,7 +66,9 @@ class Result:
     """Outcome of one experiment."""
 
     experiment: dict[str, Any]
-    epochs: EpochSet
+    n_epochs: int
+    channels: tuple[str, ...]
+    srate: float
     summaries: list[Summary]
     elapsed: float
     exported: list[str] = field(default_factory=list)
@@ -77,6 +79,9 @@ def main() -> None:
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--only", nargs="+", help="run only these experiments")
     parser.add_argument("--no-tracking", action="store_true", help="do not log to MLflow")
+    parser.add_argument(
+        "--fresh", action="store_true", help="ignore the checkpoints of finished experiments"
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 
@@ -87,6 +92,11 @@ def main() -> None:
     versions = package_versions()
     results: list[Result] = []
     for experiment in experiments:
+        checkpoint = checkpoint_path(config, experiment, code)
+        if checkpoint is not None and checkpoint.exists() and not args.fresh:
+            logger.info("%s: finished in an earlier run, from %s", experiment["name"], checkpoint)
+            results.append(load_result(checkpoint))
+            continue
         epochs, dropped = drop_small_subjects(
             cached_epochs(experiment), config["min_epochs_per_class"]
         )
@@ -101,7 +111,9 @@ def main() -> None:
         )
         result = Result(
             experiment=experiment,
-            epochs=epochs,
+            n_epochs=len(epochs),
+            channels=epochs.channels,
+            srate=epochs.srate,
             summaries=summarize(scores, n_classes=len(experiment["classes"])),
             elapsed=time.perf_counter() - start,
         )
@@ -114,9 +126,11 @@ def main() -> None:
                 100 * summary.accuracy_mean,
                 100 * summary.accuracy_std,
             )
-        result.exported = pretrain(config, result, code)
+        result.exported = pretrain(config, result, epochs, code)
         if not args.no_tracking:
             track(config, result, scores, code, versions)
+        if checkpoint is not None:
+            save_result(checkpoint, result)
         results.append(result)
 
     output = ROOT / config["output"]
@@ -133,14 +147,61 @@ def factory(config: dict[str, Any], name: str, srate: float) -> Any:
     return lambda: make_model(name, srate=srate, seed=config["seed"], **params)
 
 
-def pretrain(config: dict[str, Any], result: Result, code: dict[str, str]) -> list[str]:
+def checkpoint_path(
+    config: dict[str, Any], experiment: dict[str, Any], code: dict[str, str]
+) -> Path | None:
+    """Where a finished experiment is saved, so that a new run can skip it.
+
+    The key covers the experiment, the models and their settings, and the
+    version of ``src/`` (its Git tree): changing any of them recomputes the
+    experiment. Without a clean ``src/`` there is no checkpoint.
+    """
+    if code["src_tree"] == "dirty":
+        return None
+    settings = {
+        key: config.get(key)
+        for key in (
+            "models",
+            "model_params",
+            "protocols",
+            "seed",
+            "n_splits",
+            "min_epochs_per_class",
+            "pretrain",
+        )
+    }
+    key = json.dumps(
+        {"experiment": experiment, "settings": settings, "src": code["src_tree"]},
+        sort_keys=True,
+    )
+    digest = hashlib.sha256(key.encode()).hexdigest()[:12]
+    return (
+        data_dir() / "cache" / "benchmark" / config["name"] / f"{experiment['name']}-{digest}.json"
+    )
+
+
+def save_result(path: Path, result: Result) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(asdict(result), indent=1))
+
+
+def load_result(path: Path) -> Result:
+    raw = json.loads(path.read_text())
+    raw["channels"] = tuple(raw["channels"])
+    raw["summaries"] = [Summary(**summary) for summary in raw["summaries"]]
+    return Result(**raw)
+
+
+def pretrain(
+    config: dict[str, Any], result: Result, epochs: EpochSet, code: dict[str, str]
+) -> list[str]:
     """Train the ``pretrain`` models on every subject and save them to the registry."""
     names = config.get("pretrain") or []
     if not names:
         return []
     from openmind_core.models.registry import save_model
 
-    experiment, epochs = result.experiment, result.epochs
+    experiment = result.experiment
     exported = []
     for name in names:
         model_name = f"{name}-{experiment['name']}"
@@ -220,6 +281,10 @@ def code_version() -> dict[str, str]:
 
     return {
         "commit": git("rev-parse", "--short", "HEAD") or "unknown",
+        # Version of the library code only, for the checkpoints of finished experiments.
+        "src_tree": "dirty"
+        if git("status", "--porcelain", "--", "src", "protocol/src")
+        else git("rev-parse", "HEAD:src") or "dirty",
         # Result files are outputs of these scripts: they do not make the code dirty.
         "dirty": "true"
         if git("status", "--porcelain", "--untracked-files=no", "--", ".", ":!research/results")
@@ -245,7 +310,7 @@ def track(
         mlflow.create_experiment(name, artifact_location=(store / "artifacts").as_uri())
     mlflow.set_experiment(name)
 
-    experiment, epochs = result.experiment, result.epochs
+    experiment = result.experiment
     tags = {"git_commit": code["commit"], "git_dirty": code["dirty"], "task": config["task"]}
     tags |= {f"version.{package}": version for package, version in versions.items()}
     data_params = {
@@ -253,9 +318,9 @@ def track(
         "dataset": experiment["dataset"],
         "subjects": ",".join(map(str, experiment["subjects"])),
         "classes": ",".join(experiment["classes"]),
-        "channels": ",".join(epochs.channels),
-        "srate": epochs.srate,
-        "n_epochs": len(epochs),
+        "channels": ",".join(result.channels),
+        "srate": result.srate,
+        "n_epochs": result.n_epochs,
         "seed": config["seed"],
         "n_splits": config["n_splits"],
         "min_epochs_per_class": config["min_epochs_per_class"],
@@ -332,7 +397,7 @@ def write_report(
             "",
             f"{spec.description} Subjects {format_subjects(experiment['subjects'])}, "
             f"classes {', '.join(experiment['classes'])} (chance {chance:.0f} %), "
-            f"{len(result.epochs)} epochs after rejection.{excluded} "
+            f"{result.n_epochs} epochs after rejection.{excluded} "
             f"Evaluation time {format_duration(result.elapsed)}.",
             "",
             "| Model | " + " | ".join(protocols) + " |",

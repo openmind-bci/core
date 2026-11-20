@@ -146,6 +146,13 @@ models to pre-train on all subjects (`pretrain`). The script:
 `--only NAME` runs a single experiment without touching the result file;
 `--no-tracking` skips MLflow.
 
+Long runs can be interrupted (sleep, power, a slowed-down GPU): each finished
+experiment is saved to `$OPENMIND_DATA_DIR/cache/benchmark/<config name>/`, and
+running the same command again skips it. The checkpoint is tied to the
+experiment, the model settings and the Git version of `src/`; changing any of
+them recomputes the experiment (`--fresh` forces it). Run long benchmarks under
+`caffeinate -i -m -s` on macOS so that the computer does not sleep.
+
 ## Results (baselines)
 
 Full tables: [`research/results/baselines.md`](../research/results/baselines.md).
