@@ -34,6 +34,7 @@ import yaml
 
 import openmind_core.datasets.moabb as loader
 import openmind_core.preprocessing as preprocessing
+from openmind_core.alignment import align_epochs
 from openmind_core.datasets import DATASETS, MONTAGE_A_MI, EpochSet, load_epochs
 from openmind_core.evaluation import (
     Score,
@@ -101,6 +102,14 @@ def main() -> None:
             cached_epochs(experiment), config["min_epochs_per_class"]
         )
         experiment = experiment | {"dropped": dropped}
+        alignment = experiment.get("alignment")
+        if alignment:
+            epochs = align_epochs(
+                epochs,
+                method=alignment.get("method", "riemann"),
+                by=alignment.get("by", "session"),
+                reference_epochs=alignment.get("reference_epochs"),
+            )
         start = time.perf_counter()
         scores = evaluate(
             epochs,
@@ -397,7 +406,7 @@ def write_report(
             "",
             f"{spec.description} Subjects {format_subjects(experiment['subjects'])}, "
             f"classes {', '.join(experiment['classes'])} (chance {chance:.0f} %), "
-            f"{result.n_epochs} epochs after rejection.{excluded} "
+            f"{result.n_epochs} epochs after rejection.{excluded}{describe_alignment(experiment)} "
             f"Evaluation time {format_duration(result.elapsed)}.",
             "",
             "| Model | " + " | ".join(protocols) + " |",
@@ -439,6 +448,18 @@ def write_report(
     ]
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(lines))
+
+
+def describe_alignment(experiment: dict[str, Any]) -> str:
+    alignment = experiment.get("alignment")
+    if not alignment:
+        return " No alignment."
+    reference = alignment.get("reference_epochs")
+    source = f"its first {reference} epochs" if reference else "all its epochs"
+    return (
+        f" Alignment: {alignment.get('method', 'riemann')}, each "
+        f"{alignment.get('by', 'session')} whitened by the mean covariance of {source}."
+    )
 
 
 def format_subjects(subjects: list[int]) -> str:

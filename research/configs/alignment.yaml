@@ -1,0 +1,80 @@
+# Alignment of sessions (CORE-050), on montage C (eight motor electrodes).
+#
+#   uv sync --extra research --extra deep
+#   caffeinate -i -m -s uv run python research/experiments/benchmark.py --config research/configs/alignment.yaml
+#
+# Each session is whitened by its own mean covariance (Euclidean or Riemannian),
+# computed from all its epochs (upper bound: the reference sees the test epochs,
+# without labels) or from its first 20 epochs (the first minutes of use).
+# Alignment targets differences between days and users: cross-session and
+# cross-subject protocols only. No pre-training here.
+
+name: alignment
+title: Alignment of sessions (montage C)
+task: CORE-050
+output: research/results/alignment.md
+
+seed: 42
+n_splits: 5
+min_epochs_per_class: 10
+models: [csp-lda, mdm, ts-lr, eegnet]
+protocols: [cross-session, cross-subject]
+model_params:
+  eegnet: {max_epochs: 300, patience: 60, lr: 0.001, batch_size: 32, device: auto}
+
+experiments:
+  # Left, right, forward: the case where new users struggle most.
+  - name: bnci2014_001-3class-c-none
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right, forward]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]
+
+  - name: bnci2014_001-3class-c-euclid
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right, forward]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]
+    alignment: {method: euclid, by: session}
+
+  - name: bnci2014_001-3class-c-riemann
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right, forward]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]
+    alignment: {method: riemann, by: session}
+
+  - name: bnci2014_001-3class-c-riemann-first20
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right, forward]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]
+    alignment: {method: riemann, by: session, reference_epochs: 20}
+
+  # Left, right.
+  - name: bnci2014_001-2class-c-none
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]
+
+  - name: bnci2014_001-2class-c-riemann-first20
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]
+    alignment: {method: riemann, by: session, reference_epochs: 20}
+
+  # A second dataset, one session per subject: cross-subject only.
+  - name: physionetmi-2class-c-none
+    dataset: physionetmi
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    classes: [left, right]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]
+
+  - name: physionetmi-2class-c-riemann-first20
+    dataset: physionetmi
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    classes: [left, right]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]
+    alignment: {method: riemann, by: session, reference_epochs: 20}
