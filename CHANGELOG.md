@@ -26,6 +26,14 @@ are listed under their own heading.
 
 ### Added
 
+- Calibration trials rebuilt from markers (`openmind_core.io.TrialCollector`):
+  keeps the markers of the calibration scenes (`source` `sandbox`), rebuilds
+  each `trial_start` → `cue` → `trial_end` trial and discards interrupted ones.
+  Markers come from every `openmind-markers` stream through Plug's `EEGInlet`
+  (stream specification 1.2.0).
+- Alignment of sessions (`openmind_core.alignment`): Euclidean alignment and
+  Riemannian re-centering of the signals, with a reference from all epochs of a
+  session or its first ones; usable with every decoder.
 - Baselines and deep models retrained on montage C (eight motor electrodes,
   `research/configs/montage-c.yaml`, `research/results/montage-c.md`): same as
   montage A for left/right, better at three classes; six pre-trained models

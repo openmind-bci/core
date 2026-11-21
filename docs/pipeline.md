@@ -103,3 +103,30 @@ blinks are typically 100-300 µV on Fp1). It is also tested on the synthetic
 source of plug. **On real recordings, people double-blink on their own** (about
 47 times per hour on PhysionetMI): see [montage.md](montage.md) for the
 consequences on the `action` command.
+
+## Calibration markers
+
+The calibration scenes of OpenMind Sandbox publish their own `openmind-markers`
+stream (`source` `sandbox`): for each trial, `trial_start`, then the `cue` with
+the expected command, then `trial_end`, plus `event` markers for sessions and
+blocks. Core reads markers through `openmind_plug.inlet.EEGInlet`, which follows
+the LSL stream specification 1.2.0 of Plug: it reads **every** markers stream,
+including streams that start later, and merges them by timestamp on the local
+LSL clock.
+
+`openmind_core.io.TrialCollector` rebuilds the calibration trials:
+
+```python
+from openmind_core.io import TrialCollector
+
+collector = TrialCollector(source="sandbox")  # ignore cues of a replayed dataset
+for trial in collector.add(inlet.read_markers()):
+    trial.label, trial.cue_time  # epochs are cut from the cue, as offline
+```
+
+Only markers of the given `source` are kept, so the cues of a dataset replayed
+by Plug (`source` `replay`) do not mix with calibration cues. A trial is kept
+when its `trial_end` follows its `cue`; a trial started and never ended
+(another `trial_start`, or `session_end`) was interrupted and is discarded
+(`collector.interrupted` counts them). Every complete trial is kept for
+training, whether the user succeeded or not.
