@@ -154,6 +154,9 @@ class BandPowerFrame:
             expected_labels: Electrodes the viewer expects; those absent from
                 the stream (e.g. ``Fp1``) are appended with ``ok = False`` and
                 no values.
+
+        The message ``ts`` is the Unix time at which it is built, as for every
+        protocol message; :attr:`timestamp` stays on the LSL clock of the EEG.
         """
         names = list(self.bands)
 
@@ -190,7 +193,7 @@ class BandPowerFrame:
             if label not in present
         )
         return BandPower(
-            ts=now() if self.timestamp is None else self.timestamp,
+            ts=now(),  # Unix time of the message; frame timestamps are on the LSL clock
             user=user,
             srate_hz=srate,
             bands={name: (low, high) for name, (low, high) in self.bands.items()},

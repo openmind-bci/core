@@ -98,6 +98,44 @@ colors the cortex under each electrode and is not a source localization.
   expected by the viewer but absent from the stream (e.g. `Fp1`) are added with
   `ok: false`.
 
+### Running it
+
+`openmind-core bandpower` reads the standard EEG stream (the `plug` extra:
+`uv sync --extra plug`), feeds the estimator and publishes `bandpower` messages
+on `openmind/v1/bandpower`, at most `--rate` frames per second (default 10).
+The loop itself is `online/bandpower_service.py` (`run_bandpower`), independent
+of LSL and MQTT; `bus/mqtt.py` holds the MQTT `Publisher`.
+
+Full chain without a headset, one terminal each:
+
+```bash
+# 1. broker
+cd sandbox/dev && docker compose up -d
+# 2. synthetic EEG on LSL (montage C: the eight motor electrodes)
+cd plug && uv run openmind-plug stream --source synthetic --montage C
+# 3. band power; keep still for the first 30 s (baseline)
+cd core && uv run openmind-core bandpower --broker localhost:1883 --user P01 --expected C
+# 4. MQTT <-> WebSocket gateway of the sandbox, then open the Godot brain panel
+cd sandbox && uv run openmind-sandbox bridge
+```
+
+Options: `--baseline-s 30` (seconds of rest recorded first; the console prints
+"Baseline: stay relaxed..." then "Baseline ready"; `0` disables it and `rel_*`
+stay `null`), `--expected C` (a montage letter or comma-separated labels; the
+ones absent from the stream are sent with `ok: false`), `--user P01`
+(pseudonym), `--source-id` (pick one stream when several run).
+
+To look at the numbers without any broker, add `--dry-run`: one line per frame
+is printed (`rel_mu` per electrode once the baseline is ready, otherwise the mu
+power in µV²/Hz):
+
+```bash
+uv run openmind-core bandpower --dry-run --baseline-s 10
+```
+
+Rate limiting and the baseline follow the sample timestamps, not the wall clock.
+Ctrl+C stops cleanly.
+
 ## Jaw clench: a muscle signal
 
 The `action` command comes from a **double jaw clench** (clench, release at

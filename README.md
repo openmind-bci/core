@@ -103,7 +103,7 @@ See [CHANGELOG.md](CHANGELOG.md).
 | Fast calibration (fine-tuning, cold start by similarity) | planned |
 | User profiles (`openmind-core profile`) | planned |
 | Real-time loop: LSL in, MQTT commands and heartbeat out (`openmind-core online`) | planned |
-| Band power for the 3D brain (`openmind/v1/bandpower`) | planned |
+| Band power for the 3D brain (`openmind/v1/bandpower`) | available (`openmind-core bandpower`) |
 
 ## Installation
 
@@ -127,6 +127,14 @@ Train and compare decoders on a public dataset (downloaded on first use into
 ```bash
 uv sync --extra research
 uv run python research/experiments/benchmark.py --config research/configs/baselines.yaml
+```
+
+Feed the 3D brain of the sandbox from a Plug stream (add `--dry-run` to print the
+frames instead of publishing them, no broker needed):
+
+```bash
+uv sync --extra plug
+uv run openmind-core bandpower --broker localhost:1883 --user P01 --expected C
 ```
 
 Or use the building blocks directly:

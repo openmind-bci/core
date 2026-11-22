@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import numpy as np
 import numpy.typing as npt
 import pytest
@@ -201,7 +203,7 @@ def test_message_round_trip() -> None:
     stamps = 1_763_478_000.0 + np.arange(2500) / SRATE
     frame = estimator.push(_stream(), stamps)[-1]
     message = frame.to_message("P03", SRATE, expected_labels=["Fp1"])
-    assert message.ts == frame.timestamp
+    assert abs(message.ts - time.time()) < 5.0  # Unix time, not the LSL clock
     decoded = decode(encode(message), BandPower)
     assert decoded == message
     assert decoded.bands["mu"] == (8.0, 13.0)

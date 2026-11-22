@@ -118,7 +118,7 @@ files = ["src", "protocol/src"]
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["pylsl.*", "mne.*", "moabb.*", "pyriemann.*", "sklearn.*", "scipy.*", "braindecode.*", "mlflow.*"]
+module = ["pylsl.*", "mne.*", "moabb.*", "pyriemann.*", "sklearn.*", "scipy.*", "braindecode.*", "mlflow.*", "openmind_plug.*"]
 ignore_missing_imports = true
 
 # --- Tests -----------------------------------------------------------------

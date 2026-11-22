@@ -13,9 +13,12 @@ are listed under their own heading.
 
 - Online band power estimator (`BandPowerEstimator`): alpha, mu and beta power per
   electrode every 100 ms, smoothing, resting baseline and channel quality flags,
-  as `bandpower` messages (no publication yet).
+  as `bandpower` messages.
 - MQTT `Publisher` (`openmind_core.bus`): paho-mqtt 2, automatic reconnection,
   QoS per message kind, clear error when the broker is down, `parse_broker()`.
+- `openmind-core bandpower`: reads the standard EEG stream and publishes the
+  band power at up to `--rate` Hz, with a resting baseline (`--baseline-s`),
+  expected electrodes (`--expected`) and `--dry-run` (no broker).
 
 ### Protocol 1.0.1 (`openmind-protocol`)
 
