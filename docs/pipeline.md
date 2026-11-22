@@ -117,8 +117,52 @@ step.actions  # times of double jaw clenches
   the first sample when none are given); `actions` use the same clock.
 - The stream must run at the sampling rate of the model: resampling is out of
   scope (the decoder refuses a mismatch).
-- Not yet there: accumulation of evidence over successive windows into commands,
-  and MQTT publication (next steps of `CORE-080`).
+- MQTT publication is not part of these modules (it is wired separately).
+
+### From probabilities to commands
+
+```python
+from openmind_core.online import CommandEmitter, EvidenceAccumulator, StatusEmitter
+
+acc = EvidenceAccumulator(card.classes)
+commands = CommandEmitter("P03")
+status = StatusEmitter(card.name, "P03")
+for decision in acc.update(decoder.push(block, timestamps)):
+    ...  # decision.command, decision.confidence
+messages = commands.process(decisions)  # openmind_protocol.Command objects to publish
+```
+
+- **Averaging**: `EvidenceAccumulator` keeps the last `windows` predictions
+  (4 windows of a 250 ms step, about 1 s) and averages the probabilities of
+  the decoded ones. Windows that were not decoded count as missing; with fewer
+  than `min_ok` (2) decoded windows there is no evidence.
+- **Thresholds**: the most probable class becomes a command when its mean
+  probability reaches its own threshold (`left`/`right`/`forward`, default 0.6
+  each; `forward` is weaker in EEG, so tune it apart). Objects apply their own,
+  stricter thresholds (0.80, `action` 0.85 on the robot) on the confidence of
+  the message, which is the mean probability.
+- **Hysteresis**: the current command is kept while its mean probability stays
+  above `threshold - hysteresis` (0.05), so it does not flicker around the
+  threshold.
+- **Rest by default**: without evidence (muscle, rejected, warm-up) the
+  decision is `rest` with confidence 1.0; with weak evidence it is `rest` with
+  confidence `1 - max(mean)`. A class without threshold (such as a `rest`
+  class of a 4-class model) maps to `rest`.
+- **Action**: each double jaw clench gives one `action` decision (confidence
+  0.95), placed in time order among the decisions. It does not change the
+  current movement command.
+- **Repetition**: `CommandEmitter` emits a message on every change of command
+  and repeats the current one every 0.5 s at most, so a lost message is
+  recovered and objects with a 2 s heartbeat see a live stream. `action` is
+  always emitted. `seq` starts at 0 and increases by 1 per message.
+- **Status**: `StatusEmitter` is due every 0.25 s (4 Hz, the protocol asks for
+  at least 2 Hz). `decoder_state()` gives `calibrating` during warm-up,
+  `degraded` when no window was decoded for more than 2 s (silent stream or
+  permanent rejection, tracked by `HealthMonitor`) and `running` otherwise.
+- **Latency**: `LatencyMeter` records, for each published command, the delay
+  between the arrival of the last sample of its window and the publication.
+  `summary()` gives count, mean, p50, p95 and max in ms, and `to_event()` builds
+  the `decoder` / `latency` event (see `protocol.md`).
 
 ## Public datasets
 

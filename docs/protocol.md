@@ -89,6 +89,17 @@ share the LSL clock.
 
 Free telemetry: `data` is an object whose content is defined per (`object`, `kind`).
 
+Example: the decoder reports its end-to-end latency (last sample of a window
+received to command published), in milliseconds, over the commands published so
+far:
+
+```json
+{"v":1,"object":"decoder","kind":"latency","ts":1763478000.25,
+ "data":{"count":120,"mean_ms":18.4,"p50_ms":16.0,"p95_ms":35.2,"max_ms":48.9}}
+```
+
+This is plain telemetry: the schema is unchanged.
+
 ### `score`
 
 ```json
