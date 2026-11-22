@@ -9,6 +9,12 @@ are listed under their own heading.
 
 ## [Unreleased]
 
+### Added
+
+- Calibration curve experiment (`openmind_core.calibration`, `research/experiments/calibration_curve.py`):
+  accuracy versus number of calibration trials for generic, aligned,
+  aligned + tuned and from-scratch decoders, on a new user's session.
+
 ### Protocol 1.0.1 (`openmind-protocol`)
 
 - `action` is described as a double jaw clench (a muscle signal) instead of a

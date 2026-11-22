@@ -1,0 +1,42 @@
+# Calibration curve (CORE-060): accuracy as a function of the number of
+# calibration trials of a new user, on montage C (eight motor electrodes).
+#
+#   uv sync --extra research
+#   caffeinate -i -m -s uv run python research/experiments/calibration_curve.py --config research/configs/calibration-curve.yaml
+#
+# For every target subject (leave one subject out) and each of its sessions: the
+# first n trials per class are the calibration set, the trials after them the test
+# set. Conditions: generic (no calibration), aligned (reference from the
+# calibration signals, no labels), aligned+tuned (calibration trials added to the
+# training set with weight target_weight), scratch (calibration trials only).
+# Protocol: docs/evaluation.md, "Calibration curve".
+
+name: calibration-curve
+title: Calibration curve (montage C)
+task: CORE-060
+output: research/results/calibration-curve.md
+
+seed: 42
+min_epochs_per_class: 10
+models: [ts-lr, mdm, csp-lda]
+conditions: [generic, aligned, aligned+tuned, scratch]
+n_per_class: [0, 5, 10, 20, 40]
+target_weight: 10
+alignment: {method: riemann}
+min_test_per_class: 10
+unlabeled_start: 20
+
+experiments:
+  - name: bnci2014_001-3class-c
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right, forward]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]
+
+  # One session of about 20 trials per class (runs 4-14): the largest n values
+  # are skipped. Subject 88 is left out (recorded at 128 Hz, see MOABB).
+  - name: physionetmi-3class-c
+    dataset: physionetmi
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109]
+    classes: [left, right, forward]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]
