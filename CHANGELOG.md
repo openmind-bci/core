@@ -26,6 +26,13 @@ are listed under their own heading.
 
 ### Added
 
+- Online decoder engine (`openmind_core.online.OnlineDecoder`): EEG blocks in,
+  class probabilities per 2 s window out, with the filter, windows, amplitude
+  rejection and alignment of offline training (same probabilities, tested).
+  Pauses on jaw muscle activity (`muscle`), reports double clenches as
+  `action`, and estimates the alignment reference on the first 30 s when the
+  profile has none (`Aligner.from_reference` restores a stored one). No MQTT
+  and no evidence accumulation yet.
 - Model registry for every model: baselines are saved as `model.joblib`
   (`format="sklearn"`), the card records the training `alignment` and
   `filters`, torch is imported only for deep models. `openmind-core train`

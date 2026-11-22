@@ -75,6 +75,22 @@ class Aligner:
             raise ValueError(f"unknown method {method!r}; available: {list(METHODS)}")
         self.method = method
 
+    @classmethod
+    def from_reference(cls, covariance: npt.ArrayLike, method: str = "riemann") -> Aligner:
+        """Build a fitted aligner from a stored reference covariance (a profile's).
+
+        Raises:
+            ValueError: If the method is unknown, the matrix is not square or
+                not positive definite.
+        """
+        matrix = np.asarray(covariance, dtype=np.float64)
+        if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+            raise ValueError(f"expected a square covariance matrix, got shape {matrix.shape}")
+        aligner = cls(method)
+        aligner.reference_ = matrix
+        aligner.whitening_ = inverse_sqrt(matrix)
+        return aligner
+
     def fit(self, X: npt.ArrayLike) -> Aligner:
         """Estimate the reference from epochs of the session (no labels needed)."""
         self.reference_ = reference_covariance(X, self.method)

@@ -112,3 +112,16 @@ def test_invalid_inputs() -> None:
         align_epochs(epochs, by="day")
     with pytest.raises(ValueError, match="reference_epochs"):
         align_epochs(epochs, reference_epochs=0)
+
+
+def test_from_reference_matches_a_fitted_aligner() -> None:
+    epochs = synthetic_epochs(subjects=(1,), sessions=("0",))
+    fitted = Aligner("riemann").fit(epochs.X)
+    restored = Aligner.from_reference(fitted.reference_, "riemann")
+    np.testing.assert_allclose(restored.transform(epochs.X), fitted.transform(epochs.X))
+    with pytest.raises(ValueError, match="square"):
+        Aligner.from_reference(np.zeros((2, 3)))
+    with pytest.raises(ValueError, match="positive definite"):
+        Aligner.from_reference(-np.eye(3))
+    with pytest.raises(ValueError, match="unknown method"):
+        Aligner.from_reference(np.eye(3), "mean")

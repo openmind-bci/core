@@ -74,6 +74,52 @@ channels, sampling rate, epoch length, classes, the **alignment** and the
 Joblib files are pickles and execute code when loaded: only load models you
 trained or trust.
 
+## Online decoding
+
+`openmind_core.online.OnlineDecoder` turns blocks of EEG into class
+probabilities with a registered model:
+
+```text
+block (µV, all stream channels)
+  └─ pick the card channels (case-insensitive: Cz = CZ)
+       ├─ StreamFilter 8-30 Hz ─ SlidingWindow 2 s / 250 ms ─ amplitude rejection (150 µV)
+       │                                     │                       │ rejected → no prediction
+       └─ JawClenchDetector ─ active? ── "muscle" → no prediction     │
+                           └─ double clench → action timestamp        ▼
+                                                    Aligner (if the model needs it) ─ predict_proba
+```
+
+```python
+from openmind_core.models.registry import load_model
+from openmind_core.online import OnlineDecoder
+
+model, card = load_model("ts-lr-bnci2014_001-c-riemann")
+decoder = OnlineDecoder(model, card, stream_labels, srate)  # + reference=profile reference
+step = decoder.push(block, timestamps)   # block: (n_samples, n_stream_channels) in µV
+for p in step.predictions:  # p.timestamp, p.probabilities, p.ok, p.reason
+    ...
+step.actions  # times of double jaw clenches
+```
+
+- It uses the code of offline training (`StreamFilter`, `SlidingWindow`,
+  `amplitude_mask`, `Aligner`): a window gives the same probabilities as the
+  same epoch cut offline (tested). Filter settings come from the model card.
+- A window that is not decoded still produces a `Prediction` with `ok=False`
+  and a reason: `rejected` (above 150 µV peak to peak), `muscle` (a jaw burst is
+  in progress; muscle also contaminates beta) or `warmup`.
+- **Alignment**: a model trained on aligned epochs needs the reference
+  covariance of the session. With a stored `Reference` (its channels must be the
+  card's) decoding starts at once. Otherwise the decoder collects clean windows
+  for `warmup_s` (30 s) and fits the `Aligner` on them: `state` is
+  `"calibrating"` meanwhile and predictions say `warmup`. The covariance is then
+  available as `reference_covariance` to store in the profile.
+- Timestamps are the LSL time of the last sample of a window (or seconds since
+  the first sample when none are given); `actions` use the same clock.
+- The stream must run at the sampling rate of the model: resampling is out of
+  scope (the decoder refuses a mismatch).
+- Not yet there: accumulation of evidence over successive windows into commands,
+  and MQTT publication (next steps of `CORE-080`).
+
 ## Public datasets
 
 ```python
