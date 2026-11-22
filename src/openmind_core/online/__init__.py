@@ -1,4 +1,4 @@
-"""Real-time decoding: from EEG blocks to class probabilities and commands."""
+"""Real-time decoding and services: from the EEG stream to published messages."""
 
 from openmind_core.online.decoder import DecoderStep, OnlineConfig, OnlineDecoder, Prediction
 from openmind_core.online.emitter import (
