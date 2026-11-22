@@ -173,7 +173,7 @@ and ignores commands below its confidence threshold. Details in
 | `src/openmind_core/` | the decoder: I/O, preprocessing, models, alignment, calibration, online loop |
 | `protocol/` | the command protocol (`openmind-protocol` package, the contract with sandbox) |
 | `research/` | experiments, benchmark configs, results and notes; never imported by `src/` |
-| `docs/` | [pipeline](docs/pipeline.md), [evaluation](docs/evaluation.md), [montage](docs/montage.md), [action gesture](docs/action-gesture.md), [protocol](docs/protocol.md) |
+| `docs/` | [pipeline](docs/pipeline.md), [evaluation](docs/evaluation.md), [montage](docs/montage.md), [action gesture](docs/action-gesture.md), [protocol](docs/protocol.md), [profiles](docs/profiles.md) |
 | `tests/` | tests of `openmind-core` |
 
 ## Data and privacy

@@ -26,6 +26,10 @@ are listed under their own heading.
 
 ### Added
 
+- User profile store (`openmind_core.profiles`, `openmind-core profile`):
+  pseudonymized ids, reference covariance, scores, personal weights directory,
+  refusal of roots inside a Git repository and full erasure on delete.
+  See `docs/profiles.md`.
 - Calibration trials rebuilt from markers (`openmind_core.io.TrialCollector`):
   keeps the markers of the calibration scenes (`source` `sandbox`), rebuilds
   each `trial_start` → `cue` → `trial_end` trial and discards interrupted ones.
