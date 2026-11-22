@@ -3,7 +3,8 @@
 Subcommands:
 
 * ``info``: versions and data directory;
-* ``profile create|list|show|delete``: local pseudonymized user profiles.
+* ``profile create|list|show|delete``: local pseudonymized user profiles;
+* ``train``: train a model on a public dataset and register it.
 
 Others (``online``, ``bandpower``...) are added by later tasks.
 """
@@ -166,3 +167,54 @@ def profile_delete(
     except (ValueError, ProfileNotFoundError) as exc:
         raise _fail(str(exc.args[0]) if exc.args else str(exc)) from exc
     typer.echo(f"erased profile {user} ({count} files removed)")
+
+
+@app.command("train")
+def train(
+    dataset: Annotated[str, typer.Option(help="Public dataset, e.g. bnci2014_001.")],
+    subjects: Annotated[str, typer.Option(help="Subjects: ranges and commas, e.g. 1-9 or 1,3.")],
+    model: Annotated[str, typer.Option(help="ts-lr, mdm, csp-lda, eegnet or shallow.")] = "ts-lr",
+    classes: Annotated[str, typer.Option(help="Comma-separated commands.")] = "left,right,forward",
+    channels: Annotated[
+        str, typer.Option(help="Montage letter (A, C) or comma-separated channel labels.")
+    ] = "C",
+    alignment: Annotated[
+        str, typer.Option(help="none, euclid or riemann (per session, like the benchmark).")
+    ] = "none",
+    name: Annotated[str | None, typer.Option(help="Registry name (default: derived).")] = None,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="Replace an existing model.")
+    ] = False,
+) -> None:
+    """Train a model on public data (research extra) and register it."""
+    from openmind_core.training import (
+        default_name,
+        parse_subjects,
+        resolve_channels,
+        train_and_register,
+    )
+
+    try:
+        subject_list = parse_subjects(subjects)
+        labels, montage = resolve_channels(channels)
+        class_list = [c.strip() for c in classes.split(",") if c.strip()]
+        model_name = name or default_name(model, dataset, montage, alignment)
+        path, training = train_and_register(
+            dataset,
+            subject_list,
+            model,
+            class_list,
+            labels,
+            alignment,
+            model_name,
+            overwrite=overwrite,
+        )
+    except ImportError as exc:
+        raise _fail(
+            f"{exc}. Install the research extra (datasets), plus deep for deep models: "
+            "uv sync --extra research --extra deep"
+        ) from exc
+    except (ValueError, KeyError, FileExistsError) as exc:
+        raise _fail(str(exc.args[0]) if exc.args else str(exc)) from exc
+    typer.echo(f"trained {model} on {training['n_epochs']} epochs {training['counts']}")
+    typer.echo(f"registered {model_name} in {path}")

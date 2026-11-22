@@ -129,6 +129,15 @@ uv sync --extra research
 uv run python research/experiments/benchmark.py --config research/configs/baselines.yaml
 ```
 
+Train a model on a public dataset and register it (needs the `research` extra,
+and `deep` for `eegnet` / `shallow`):
+
+```bash
+uv run openmind-core train --dataset bnci2014_001 --subjects 1-9 \
+    --model ts-lr --channels C --alignment riemann
+# registered as ts-lr-bnci2014_001-c-riemann in $OPENMIND_DATA_DIR/models
+```
+
 Or use the building blocks directly:
 
 ```python

@@ -52,6 +52,28 @@ only, and the blink detector runs on the live Fp1 channel.
   non-finite value. PhysionetMI is noisier than BNCI: about 15-20 % of its epochs
   are rejected (subject 1: 13 of 69), none for BNCI2014-001 subject 1.
 
+## Train a model
+
+```bash
+uv run openmind-core train --dataset bnci2014_001 --subjects 1-9 --model ts-lr \
+    --classes left,right,forward --channels C --alignment riemann [--name NAME] [--overwrite]
+```
+
+Needs the `research` extra (datasets), and `deep` for `eegnet` and `shallow`.
+`--subjects` takes ranges and commas (`1-3,5`); `--channels` a montage letter
+(`A`: the seven motor electrodes, `C`: montage A plus CPz) or a comma-separated
+list; `--alignment` is `none`, `euclid` or `riemann`, applied per session as in
+the benchmark. The model is fitted on all epochs and registered under
+`<model>-<dataset>-<montage>[-<alignment>]` unless `--name` is given.
+
+The registry (`$OPENMIND_DATA_DIR/models/<name>/`) holds a `card.json` and the
+weights: `weights.pt` for deep models (a `state_dict`, loaded with
+`weights_only=True`) or `model.joblib` for baselines. The card records the
+channels, sampling rate, epoch length, classes, the **alignment** and the
+**filters** of the training epochs, so the online decoder can repeat them.
+Joblib files are pickles and execute code when loaded: only load models you
+trained or trust.
+
 ## Public datasets
 
 ```python

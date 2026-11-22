@@ -26,6 +26,11 @@ are listed under their own heading.
 
 ### Added
 
+- Model registry for every model: baselines are saved as `model.joblib`
+  (`format="sklearn"`), the card records the training `alignment` and
+  `filters`, torch is imported only for deep models. `openmind-core train`
+  trains a model on a public dataset (`--dataset`, `--subjects 1-9`, `--model`,
+  `--channels A|C|list`, `--alignment`) and registers it.
 - User profile store (`openmind_core.profiles`, `openmind-core profile`):
   pseudonymized ids, reference covariance, scores, personal weights directory,
   refusal of roots inside a Git repository and full erasure on delete.

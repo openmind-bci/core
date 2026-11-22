@@ -38,6 +38,12 @@ from openmind_core.preprocessing.windows import EPOCH_OFFSET_S, WINDOW_S, epochs
 #: Decoding channels: montage A without Fp1, in montage order.
 MONTAGE_A_MI: Final[tuple[str, ...]] = ("FC3", "FC4", "C3", "Cz", "C4", "CP3", "CP4")
 
+#: Decoding channels of montage C: montage A plus CPz (see ``docs/montage.md``).
+MONTAGE_C: Final[tuple[str, ...]] = (*MONTAGE_A_MI, "CPz")
+
+#: Named montages accepted by ``openmind-core train``.
+MONTAGES: Final[dict[str, tuple[str, ...]]] = {"A": MONTAGE_A_MI, "C": MONTAGE_C}
+
 #: Target sampling rate of every dataset.
 TARGET_SRATE: Final = 250.0
 

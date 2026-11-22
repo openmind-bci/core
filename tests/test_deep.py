@@ -136,6 +136,15 @@ def test_registry_round_trip(
     assert card.params["max_epochs"] == 60
     assert card.created.endswith("+00:00")
     assert [c.name for c in list_models(tmp_path)] == ["shallow-test"]
+    assert (card.format, card.alignment, card.filters) == ("torch", None, {})
+
+
+def test_registry_deep_card_extras(trained: DeepClassifier, tmp_path: Path) -> None:
+    save_model(
+        trained, "aligned", MONTAGE_A_MI, root=tmp_path, alignment="euclid", filters={"low_hz": 8.0}
+    )
+    card = load_card("aligned", root=tmp_path)
+    assert (card.alignment, card.filters) == ("euclid", {"low_hz": 8.0})
 
 
 def test_registry_refuses_overwrite_and_bad_names(trained: DeepClassifier, tmp_path: Path) -> None:
