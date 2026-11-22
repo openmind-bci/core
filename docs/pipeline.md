@@ -72,6 +72,32 @@ Downloads go to `$OPENMIND_DATA_DIR/mne_data`; the global MNE configuration is n
 modified. `research/experiments/make_epochs.py` builds and caches epochs for a few
 subjects in `$OPENMIND_DATA_DIR/cache/epochs/`.
 
+## Band power (3D brain)
+
+`BandPowerEstimator` (`preprocessing/bandpower.py`) feeds the `bandpower` message
+that animates the 3D brain of the sandbox. It works at **sensor level**: it
+colors the cortex under each electrode and is not a source localization.
+
+- bands: alpha 8-12 Hz, mu 8-13 Hz, beta 13-30 Hz (`BANDS`);
+- power: Welch spectrum of the raw signal in µV (1 s segments, 50 % overlap,
+  Hann window, linear detrending), averaged over the bins of each band, in
+  µV²/Hz; the DC offset and the power line lie outside the bands, so no filter
+  is needed;
+- rate: a 2 s window (the decoder window, same `SlidingWindow`) every 100 ms,
+  about 10 frames per second; the result is the same block by block or at once;
+- smoothing: exponential moving average, weight 0.5 on the new frame
+  (`BandPowerConfig.smoothing`); a channel that was not ok restarts from its
+  new value;
+- baseline: median of the frames recorded while the user rests
+  (`start_baseline()` / `stop_baseline()`, or `set_baseline()` from a profile);
+  `relative = (power - baseline) / baseline`, negative when the rhythm
+  desynchronizes; no baseline (or a baseline at 0 or NaN) gives `null`;
+- `ok: false` when a channel has a non-finite value, is flat (standard deviation
+  below 0.5 µV) or saturated (peak above 2000 µV, or more than 5 % of the
+  samples equal to its maximum or minimum); its values are `null`. Electrodes
+  expected by the viewer but absent from the stream (e.g. `Fp1`) are added with
+  `ok: false`.
+
 ## Jaw clench: a muscle signal
 
 The `action` command comes from a **double jaw clench** (clench, release at

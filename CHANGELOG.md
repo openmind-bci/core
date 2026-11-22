@@ -9,6 +9,12 @@ are listed under their own heading.
 
 ## [Unreleased]
 
+### Added
+
+- Online band power estimator (`BandPowerEstimator`): alpha, mu and beta power per
+  electrode every 100 ms, smoothing, resting baseline and channel quality flags,
+  as `bandpower` messages (no publication yet).
+
 ### Protocol 1.0.1 (`openmind-protocol`)
 
 - `action` is described as a double jaw clench (a muscle signal) instead of a

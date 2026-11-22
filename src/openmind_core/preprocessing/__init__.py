@@ -1,6 +1,14 @@
 """Preprocessing shared by offline training and the online decoder."""
 
 from openmind_core.preprocessing.artifacts import REJECT_PTP_UV, amplitude_mask
+from openmind_core.preprocessing.bandpower import (
+    BANDS,
+    BandPowerConfig,
+    BandPowerEstimator,
+    BandPowerFrame,
+    band_power,
+    channel_ok,
+)
 from openmind_core.preprocessing.blink import (
     BlinkConfig,
     DoubleBlinkDetector,
@@ -17,10 +25,14 @@ from openmind_core.preprocessing.windows import (
 )
 
 __all__ = [
+    "BANDS",
     "EPOCH_OFFSET_S",
     "REJECT_PTP_UV",
     "STEP_S",
     "WINDOW_S",
+    "BandPowerConfig",
+    "BandPowerEstimator",
+    "BandPowerFrame",
     "BlinkConfig",
     "DoubleBlinkDetector",
     "FilterConfig",
@@ -29,6 +41,8 @@ __all__ = [
     "SlidingWindow",
     "StreamFilter",
     "amplitude_mask",
+    "band_power",
+    "channel_ok",
     "detect_double_blinks",
     "detect_double_clenches",
     "epochs_at",
