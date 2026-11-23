@@ -12,7 +12,9 @@ Protocol (one new user, one session at a time, leave-one-subject-out):
 2. **Source data.** Every trial of every other subject, all sessions, each
    session aligned on its own reference when the condition uses alignment.
 3. **Conditions** (:data:`CONDITIONS`): ``generic``, ``aligned``,
-   ``aligned+tuned``, ``scratch``.
+   ``aligned+tuned``, ``scratch``; for deep models ``aligned+finetune-<strategy>``
+   (:mod:`openmind_core.calibration.finetune`); ``coldstart-knn`` (source model
+   trained on the ``k`` source subjects closest to the new user, at ``n = 0``).
 
 For ``n = 0`` the aligned conditions have no calibration trials to build a
 reference from. They use the first ``unlabeled_start`` trials of the session,
@@ -32,7 +34,7 @@ import inspect
 import logging
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Final
 
 import numpy as np
@@ -40,6 +42,8 @@ import numpy.typing as npt
 from sklearn.metrics import accuracy_score, cohen_kappa_score
 
 from openmind_core.alignment import Aligner, align_epochs
+from openmind_core.calibration.coldstart import nearest_subjects, rest_signature, subject_signatures
+from openmind_core.calibration.finetune import STRATEGIES, FineTuneSettings
 from openmind_core.datasets.epochs import EpochSet
 from openmind_core.models import make_model
 
@@ -52,15 +56,44 @@ GENERIC: Final = "generic"
 ALIGNED: Final = "aligned"
 TUNED: Final = "aligned+tuned"
 SCRATCH: Final = "scratch"
+COLDSTART: Final = "coldstart-knn"
+FINETUNE_PREFIX: Final = "aligned+finetune-"
 
-#: Supported conditions, in reporting order.
+#: The four base conditions, in reporting order. Beyond them: ``coldstart-knn``
+#: (:data:`COLDSTART`) and ``aligned+finetune-<strategy>`` (deep models only).
 CONDITIONS: Final[tuple[str, ...]] = (GENERIC, ALIGNED, TUNED, SCRATCH)
+
+#: Every ``aligned+finetune-<strategy>`` condition.
+FINETUNE_CONDITIONS: Final[tuple[str, ...]] = tuple(FINETUNE_PREFIX + s for s in STRATEGIES)
+
+#: Every condition, in reporting order.
+ALL_CONDITIONS: Final[tuple[str, ...]] = (*CONDITIONS, COLDSTART, *FINETUNE_CONDITIONS)
+
+#: Default number of neighbours of ``coldstart-knn``.
+DEFAULT_COLDSTART_K: Final = 3
 
 #: Calibration trials per class of the curve.
 DEFAULT_N_PER_CLASS: Final[tuple[int, ...]] = (0, 5, 10, 20, 40)
 
 #: Smallest number of calibration trials per class that ``scratch`` is trained on.
 MIN_SCRATCH_PER_CLASS: Final = 5
+
+
+def finetune_strategy(condition: str) -> str | None:
+    """The strategy of an ``aligned+finetune-<strategy>`` condition, else ``None``."""
+    if condition.startswith(FINETUNE_PREFIX):
+        return condition[len(FINETUNE_PREFIX) :]
+    return None
+
+
+def is_condition(condition: str) -> bool:
+    """Whether ``condition`` is one of :data:`ALL_CONDITIONS`."""
+    return condition in ALL_CONDITIONS
+
+
+def condition_rank(condition: str) -> int:
+    """Position of a condition in the reporting order (unknown ones last)."""
+    return ALL_CONDITIONS.index(condition) if condition in ALL_CONDITIONS else len(ALL_CONDITIONS)
 
 
 @dataclass(frozen=True)
@@ -94,7 +127,10 @@ class CurveScore:
     """Result of one (model, condition, n, subject, session).
 
     ``accuracy``, ``kappa`` and ``n_test`` are on the common test set (the main
-    result); the ``*_own`` fields are on the test set specific to ``n``.
+    result); the ``*_own`` fields are on the test set specific to ``n``. For a
+    model repeated over several seeds, every score is the mean over the seeds
+    (``n_seeds``) and ``accuracy_seed_std`` is the standard deviation of the
+    accuracy between seeds.
     """
 
     dataset: str
@@ -110,6 +146,8 @@ class CurveScore:
     n_test_own: int
     accuracy_own: float
     kappa_own: float
+    n_seeds: int = 1
+    accuracy_seed_std: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -226,33 +264,40 @@ def run_condition(
     method: str = "riemann",
     target_weight: float = 10.0,
     min_scratch_per_class: int = MIN_SCRATCH_PER_CLASS,
+    finetune: FineTuneSettings | None = None,
 ) -> dict[int, npt.NDArray[Any]]:
     """Predict the test trials of one target session under one condition.
 
     Args:
-        condition: One of :data:`CONDITIONS`.
+        condition: One of :data:`ALL_CONDITIONS`.
         factory: Builds a fresh, unfitted model.
         target: Trials of the target session, in time order, unaligned.
         split: :func:`split_calibration` of ``target``.
         source: Training trials of the other subjects, **already aligned** for
-            ``aligned`` and ``aligned+tuned`` (see :func:`calibration_curve`).
-            Unused by ``scratch``.
+            every condition but ``generic`` and ``scratch`` (see
+            :func:`calibration_curve`); for ``coldstart-knn`` only the nearest
+            subjects. Unused by ``scratch``.
         source_model: A model already fitted on ``source``, to avoid refitting it
             for every target session (``generic``, ``aligned``, ``aligned+tuned``
-            at ``n = 0``).
+            at ``n = 0``, ``coldstart-knn``, and the model the
+            ``aligned+finetune-*`` conditions start from).
         method: Alignment method of the target session.
         target_weight: Weight of the calibration trials in ``aligned+tuned``.
         min_scratch_per_class: Smallest ``n`` for ``scratch``.
+        finetune: Settings of the ``aligned+finetune-*`` conditions.
 
     Returns:
         For every ``n`` the condition applies to, the predictions on the test
         trials of that ``n`` (``split.test[n]``).
 
     Raises:
-        ValueError: For an unknown condition, or a missing ``source``.
+        ValueError: For an unknown condition, a missing ``source``, or a
+            fine-tuning condition with a model that cannot be fine-tuned.
     """
-    if condition not in CONDITIONS:
-        raise ValueError(f"unknown condition {condition!r}; available: {list(CONDITIONS)}")
+    if not is_condition(condition):
+        raise ValueError(f"unknown condition {condition!r}; available: {list(ALL_CONDITIONS)}")
+    strategy = finetune_strategy(condition)
+    settings = finetune or FineTuneSettings()
     if condition != SCRATCH and source is None and source_model is None:
         raise ValueError(f"condition {condition!r} needs source data or a fitted source model")
     X, y = target.X, target.y
@@ -273,8 +318,22 @@ def run_condition(
                 fitted = factory().fit(source.X, source.y)
             predictions[n] = fitted.predict(X[test])
             continue
+        if condition == COLDSTART and n > 0:  # a cold start is the n = 0 situation
+            continue
         aligner = Aligner(method).fit(X[split.reference[n]])
-        if condition == TUNED and n > 0:
+        if strategy is not None:
+            if fitted is None:
+                assert source is not None
+                fitted = factory().fit(source.X, source.y)
+            if not hasattr(fitted, "fine_tune"):
+                raise ValueError(f"condition {condition!r} needs a deep model with fine_tune()")
+            cal = split.calibration[n]
+            model = (
+                fitted.fine_tune(aligner.transform(X[cal]), y[cal], **settings.kwargs(strategy))
+                if n > 0
+                else fitted
+            )
+        elif condition == TUNED and n > 0:
             assert source is not None
             cal = split.calibration[n]
             train_x = np.concatenate([source.X, aligner.transform(X[cal])])
@@ -302,6 +361,9 @@ def calibration_curve(
     aligned_epochs: EpochSet | None = None,
     min_test_per_class: int = 10,
     unlabeled_start: int = 20,
+    seeds: Sequence[int] | None = None,
+    finetune: Mapping[str, Any] | None = None,
+    coldstart_k: int = DEFAULT_COLDSTART_K,
 ) -> list[CurveScore]:
     """Run the calibration experiment: every target subject, session, model, condition, n.
 
@@ -310,7 +372,7 @@ def calibration_curve(
             within each session.
         models: Model names (built with :func:`make_model`, seeded) or factories
             by name.
-        conditions: Conditions to run.
+        conditions: Conditions to run (see :data:`ALL_CONDITIONS`).
         n_values: Calibration trials per class.
         alignment: ``{"method": "riemann" | "euclid"}``; the source sessions are
             each aligned on all their own epochs.
@@ -321,14 +383,22 @@ def calibration_curve(
         aligned_epochs: ``epochs`` already aligned per session, to avoid
             recomputing it when this function is called subject by subject.
         min_test_per_class, unlabeled_start: See :func:`split_calibration`.
+        seeds: Repeat every model that has a ``seed`` parameter (the deep ones)
+            once per seed, source pre-training included, and average the
+            scores (their spread is kept in ``accuracy_seed_std``). The
+            deterministic baselines run once. ``None`` uses ``seed`` alone.
+        finetune: Settings of the ``aligned+finetune-*`` conditions (see
+            :class:`~openmind_core.calibration.finetune.FineTuneSettings`).
+        coldstart_k: Neighbours of ``coldstart-knn``.
 
     Raises:
         ValueError: For an unknown condition.
     """
-    unknown = sorted(set(conditions) - set(CONDITIONS))
+    unknown = sorted(c for c in conditions if not is_condition(c))
     if unknown:
-        raise ValueError(f"unknown conditions {unknown}; available: {list(CONDITIONS)}")
+        raise ValueError(f"unknown conditions {unknown}; available: {list(ALL_CONDITIONS)}")
     method = str((alignment or {}).get("method", "riemann"))
+    settings = FineTuneSettings.from_mapping(finetune)
     factories: dict[str, ModelFactory] = (
         dict(models)
         if isinstance(models, Mapping)
@@ -337,8 +407,8 @@ def calibration_curve(
             for name in models
         }
     )
-    needs_aligned = bool({ALIGNED, TUNED} & set(conditions))
-    if needs_aligned and aligned_epochs is None:
+    aligned_conditions = {c for c in conditions if c not in (GENERIC, SCRATCH)}
+    if aligned_conditions and aligned_epochs is None:
         aligned_epochs = align_epochs(epochs, method=method, by="session")
     scores: list[CurveScore] = []
     for subject in subjects if subjects is not None else epochs.subjects:
@@ -347,7 +417,10 @@ def calibration_curve(
         source_aligned = aligned_epochs.select(~is_target) if aligned_epochs is not None else None
         if len(source) == 0:
             raise ValueError("need at least two subjects: the source is the other subjects")
-        fitted: dict[tuple[str, bool], Any] = {}
+        signatures = (
+            subject_signatures(source, n_first=unlabeled_start) if COLDSTART in conditions else {}
+        )
+        fitted: dict[tuple[Any, ...], Any] = {}
         for session in sorted(set(epochs.session[is_target].tolist())):
             target = epochs.select(is_target & (epochs.session == session))
             split = split_calibration(target, n_values, min_test_per_class, unlabeled_start)
@@ -358,35 +431,99 @@ def calibration_curve(
                 logger.info(
                     "subject %s session %s: n = %s not feasible", subject, session, split.skipped
                 )
-            for name, factory in factories.items():
-                for condition in conditions:
-                    uses_alignment = condition in (ALIGNED, TUNED)
-                    data = source_aligned if uses_alignment else source
-                    key = (name, uses_alignment)
-                    if condition in (GENERIC, ALIGNED, TUNED) and key not in fitted:
-                        assert data is not None
-                        fitted[key] = factory().fit(data.X, data.y)
-                    predictions = run_condition(
-                        condition,
-                        factory,
-                        target,
-                        split,
-                        source=data,
-                        source_model=fitted.get(key),
-                        method=method,
-                        target_weight=target_weight,
+            neighbours: list[int] = []
+            if COLDSTART in conditions and 0 in split.n_values:
+                # The signature uses the unlabeled start of the session, never its labels.
+                signature = rest_signature(target.X[split.reference[0]])
+                found = nearest_subjects(signature, signatures, coldstart_k)
+                neighbours = sorted(subject_id for subject_id, _ in found)
+                logger.info(
+                    "subject %s session %s: cold-start neighbours %s", subject, session, found
+                )
+            for name, base_factory in factories.items():
+                runs: list[list[CurveScore]] = []
+                for run_seed in _seeds_of(base_factory, seeds):
+                    factory = (
+                        base_factory if run_seed is None else _reseeded(base_factory, run_seed)
                     )
-                    scores += _scores(
-                        epochs.dataset,
-                        name,
-                        condition,
-                        subject,
-                        session,
-                        target,
-                        split,
-                        predictions,
-                    )
+                    run: list[CurveScore] = []
+                    for condition in conditions:
+                        if condition == COLDSTART and not neighbours:
+                            continue
+                        uses_alignment = condition not in (GENERIC, SCRATCH)
+                        data = source_aligned if uses_alignment else source
+                        key: tuple[Any, ...] = (name, run_seed, uses_alignment)
+                        if condition == COLDSTART:
+                            assert source_aligned is not None
+                            key = (name, run_seed, "knn", tuple(neighbours))
+                            data = source_aligned.select(
+                                np.isin(source_aligned.subject, neighbours)
+                            )
+                        if condition != SCRATCH and key not in fitted:
+                            assert data is not None
+                            fitted[key] = factory().fit(data.X, data.y)
+                        predictions = run_condition(
+                            condition,
+                            factory,
+                            target,
+                            split,
+                            source=data,
+                            source_model=fitted.get(key),
+                            method=method,
+                            target_weight=target_weight,
+                            finetune=settings,
+                        )
+                        run += _scores(
+                            epochs.dataset,
+                            name,
+                            condition,
+                            subject,
+                            session,
+                            target,
+                            split,
+                            predictions,
+                        )
+                    runs.append(run)
+                scores += _average_seeds(runs)
     return scores
+
+
+def _seeds_of(factory: ModelFactory, seeds: Sequence[int] | None) -> list[int | None]:
+    """Seeds to repeat a model over: ``[None]`` (one run as built) unless it has a ``seed``."""
+    if seeds is None or "seed" not in factory().get_params(deep=False):
+        return [None]
+    return list(seeds)
+
+
+def _reseeded(factory: ModelFactory, seed: int) -> ModelFactory:
+    """A factory whose models are built with another ``seed``."""
+    return lambda: factory().set_params(seed=seed)
+
+
+def _average_seeds(runs: Sequence[Sequence[CurveScore]]) -> list[CurveScore]:
+    """Average the scores of the same (condition, n, session) over repeated runs."""
+    if len(runs) == 1:
+        return list(runs[0])
+    grouped: dict[tuple[str, int], list[CurveScore]] = defaultdict(list)
+    for run in runs:
+        for score in run:
+            grouped[(score.condition, score.n)].append(score)
+    averaged = []
+    for group in grouped.values():
+        first = group[0]
+        accuracy = [s.accuracy for s in group]
+        averaged.append(
+            replace(
+                first,
+                accuracy=float(np.mean(accuracy)),
+                kappa=_nanmean([s.kappa for s in group]),
+                accuracy_own=float(np.mean([s.accuracy_own for s in group])),
+                kappa_own=_nanmean([s.kappa_own for s in group]),
+                n_seeds=len(group),
+                accuracy_seed_std=float(np.std(accuracy, ddof=1)) if len(group) > 1 else 0.0,
+            )
+        )
+    return averaged
 
 
 def summarize_curve(scores: Sequence[CurveScore]) -> list[CurveSummary]:
@@ -421,8 +558,7 @@ def summarize_curve(scores: Sequence[CurveScore]) -> list[CurveSummary]:
                 ),
             )
         )
-    order = {name: i for i, name in enumerate(CONDITIONS)}
-    return sorted(summaries, key=lambda s: (s.model, order.get(s.condition, len(order)), s.n))
+    return sorted(summaries, key=lambda s: (s.model, condition_rank(s.condition), s.n))
 
 
 def _scores(

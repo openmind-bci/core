@@ -88,6 +88,8 @@ def save_model(
         raise ValueError(f"invalid model name {name!r}: use a-z, 0-9, '.', '_' or '-'")
     if not hasattr(model, "module_"):
         raise ValueError("the model is not trained")
+    if getattr(model, "adapter_", None) is not None:
+        raise ValueError("a model fine-tuned with an adapter cannot be registered yet")
     if len(channels) != len(model.scale_):
         raise ValueError(f"{len(channels)} channels given, the model takes {len(model.scale_)}")
     target = (root or models_dir()) / name

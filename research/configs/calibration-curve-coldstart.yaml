@@ -1,0 +1,37 @@
+# Similarity-based cold start (CORE-060): is a model trained on the source
+# subjects nearest to the new user better than the model trained on everyone,
+# before any labelled trial?
+#
+#   uv sync --extra research
+#   uv run python research/experiments/calibration_curve.py --config research/configs/calibration-curve-coldstart.yaml
+#
+# n = 0 only. The signature of the new user is the Riemannian mean covariance of
+# the first `unlabeled_start` trials of the session (labels never read), the same
+# 20 trials the aligned n = 0 reference uses; each source subject's signature is
+# computed the same way on the start of each of its sessions. `coldstart-knn`
+# trains on the `coldstart_k` source subjects nearest in affine-invariant
+# Riemannian distance (aligned per session, like `aligned`); `aligned` is the
+# reference: the model trained on all subjects.
+# Protocol: docs/evaluation.md, "Similarity-based cold start".
+
+name: calibration-curve-coldstart
+title: Similarity-based cold start (montage C)
+task: CORE-060
+output: research/results/calibration-curve-coldstart.md
+
+seed: 42
+min_epochs_per_class: 10
+models: [ts-lr, mdm, csp-lda]
+conditions: [aligned, coldstart-knn]
+coldstart_k: 3
+n_per_class: [0]
+alignment: {method: riemann}
+min_test_per_class: 10
+unlabeled_start: 20
+
+experiments:
+  - name: bnci2014_001-3class-c
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right, forward]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]

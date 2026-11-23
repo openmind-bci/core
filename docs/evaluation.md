@@ -191,7 +191,7 @@ space, scaler and logistic regression; weighted class means in MDM). `csp-lda`
 (its LDA takes no weights) and deep models repeat each calibration trial
 `round(target_weight)` times instead; `fit_weighted()` picks the way from the
 final estimator. Deep models (`eegnet`) are not part of the first configuration
-but plug in through the same model factories.
+but plug in through the same model factories (see *Fine-tuning strategies*).
 
 **Cold start (n = 0).** The aligned conditions have no calibration trials to build
 a reference from, so they use the **first 20 trials of the session, without
@@ -222,6 +222,66 @@ disabled while `src/` has uncommitted changes). Every score is written to
 `$OPENMIND_DATA_DIR/results/calibration-curve.csv` and logged to MLflow, one
 nested run per model, with the curves as `accuracy.<condition>` metrics whose
 step is `n`.
+
+### Fine-tuning strategies
+
+`research/configs/calibration-curve-deep.yaml` extends the curve to a deep model
+(EEGNet). For each target subject the network is **pre-trained once per seed on
+the aligned trials of the other subjects**; that model is the `aligned` condition
+at `n = 0`. For `n > 0` it is then fine-tuned on the `n` calibration trials per
+class (aligned on their own reference, like the test trials) by
+`DeepClassifier.fine_tune()`, one condition per strategy,
+`aligned+finetune-<strategy>`:
+
+| Strategy | What changes | Notes |
+|---|---|---|
+| `head` | output layer only | the feature extractor, batch norm statistics included, stays frozen |
+| `final` | last block (separable convolutions, batch norm) and output layer | `ShallowConvNet`: batch norm and output layer |
+| `adapter` | a new 1x1 spatial layer `x + delta @ x` (channels x channels, `delta` = 0 at the start) before the frozen network | identity at the start; weight decay pulls it back to the identity; the registry refuses such a model for now |
+| `full` | every weight | low learning rate |
+
+Fine-tuning is deterministic (seeded). With at least 30 calibration trials
+(`min_validation_trials`) 20 % are held out (stratified) and the weights of the
+best validation loss are kept, stopping after `patience` epochs without
+improvement; with fewer trials nothing is held out and training runs for exactly
+`epochs` (the best epoch cannot be told apart from so little data). The learning
+rates are per strategy and were set once, not tuned on the test subjects.
+
+EEGNet collapses on some initializations (see `research/results/montage-c.md`),
+which would turn a curve into noise. `seeds` repeats every model that has a
+`seed` parameter (pre-training and fine-tuning together) and averages the scores;
+the spread between seeds is kept in `accuracy_seed_std` of the CSV. The
+deterministic baselines run once.
+
+```bash
+uv sync --extra research --extra deep
+caffeinate -i -m -s uv run python research/experiments/calibration_curve.py \
+    --config research/configs/calibration-curve-deep.yaml
+```
+
+### Similarity-based cold start
+
+`research/configs/calibration-curve-coldstart.yaml` asks, at `n = 0`, whether the
+source model should be trained on **everyone** or only on the subjects most like
+the new user. The *signature* of a user is the Riemannian mean covariance of
+unlabelled windows (`rest_signature`). For the target it is computed on the same
+first 20 trials of the session as the `aligned` reference (labels never read);
+for each source subject on the first 20 trials of each of its sessions. The `k`
+(`coldstart_k`, default 3) nearest source subjects in the affine-invariant
+Riemannian distance (`nearest_subjects`) train the `coldstart-knn` model, aligned
+per session like `aligned`, which is the model trained on all subjects. Only `n = 0`
+is scored. A `k` equal to the number of source subjects gives `aligned` back, a
+useful check; the difference with `aligned` also mixes "similar subjects" with
+"fewer subjects", which a random-`k` control would separate.
+
+```bash
+uv run python research/experiments/calibration_curve.py \
+    --config research/configs/calibration-curve-coldstart.yaml
+```
+
+A separate configuration keeps the checkpoints of `calibration-curve.yaml` valid.
+An experiment may list `targets: [...]` to evaluate only some subjects (smoke
+runs); the source is still every other subject.
 
 ## Results (baselines)
 

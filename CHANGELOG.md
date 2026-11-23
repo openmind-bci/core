@@ -14,6 +14,13 @@ are listed under their own heading.
 - Calibration curve experiment (`openmind_core.calibration`, `research/experiments/calibration_curve.py`):
   accuracy versus number of calibration trials for generic, aligned,
   aligned + tuned and from-scratch decoders, on a new user's session.
+- EEGNet fine-tuning strategies (`DeepClassifier.fine_tune()`: `head`, `final`,
+  `adapter`, `full`), `aligned+finetune-<strategy>` conditions in the calibration
+  curve, and `seeds` to average deep models over several initializations
+  (`research/configs/calibration-curve-deep.yaml`).
+- Similarity-based cold start (`openmind_core.calibration.coldstart`): nearest
+  source subjects by Riemannian distance between unlabeled signatures, and a
+  `coldstart-knn` condition (`research/configs/calibration-curve-coldstart.yaml`).
 
 ### Protocol 1.0.1 (`openmind-protocol`)
 
