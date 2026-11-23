@@ -18,6 +18,10 @@ are listed under their own heading.
 
 ### Added
 
+- Documentation: `docs/architecture.md` (packages, data flow, offline and online
+  pipeline, data on disk) and `docs/train-your-model.md` (train, register, run
+  online, bring your own classifier, personalisation, sharing rules).
+
 - Online adaptation with safeguards (`openmind_core.online.adaptation`): bounded
   Riemannian re-centering of the alignment reference (`RecenteringAdapter`), optional
   capped pseudo-labels (`PseudoLabelTuner`, off by default) and `AdaptationGuard`
