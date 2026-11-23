@@ -271,7 +271,7 @@ class DeepClassifier(ClassifierMixin, BaseEstimator):  # type: ignore[misc]
         if strategy == "adapter" and getattr(tuned, "adapter_", None) is None:
             tuned.adapter_ = ChannelAdapter(n_chans)
         target = np.searchsorted(self.classes_, labels)
-        trainable = _TRAINABLE[self.architecture][strategy]
+        trainable = tuned._trainable(strategy)
         runner = tuned._runner()
         prefix = "network." if isinstance(runner, _Adapted) else ""
         if strategy == "adapter":
@@ -301,6 +301,10 @@ class DeepClassifier(ClassifierMixin, BaseEstimator):  # type: ignore[misc]
         return tuned
 
     # -- internals -----------------------------------------------------------
+
+    def _trainable(self, strategy: str) -> tuple[str, ...] | None:
+        """Modules the ``strategy`` trains (``None``: all); subclasses override it."""
+        return _TRAINABLE[self.architecture][strategy]
 
     def _runner(self) -> nn.Module:
         """The module that maps normalized epochs to logits (adapter included)."""

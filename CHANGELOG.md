@@ -22,6 +22,12 @@ are listed under their own heading.
   source subjects by Riemannian distance between unlabeled signatures, and a
   `coldstart-knn` condition (`research/configs/calibration-curve-coldstart.yaml`).
 
+- Foundation model competitor (`openmind_core.models.foundation.FoundationClassifier`,
+  model `labram`, `foundation` extra): pre-trained LaBraM loaded from the
+  Hugging Face Hub at run time, with 250 to 200 Hz resampling and rescaling, the
+  `fine_tune()` strategies of the deep models, and
+  `research/configs/calibration-curve-foundation.yaml`.
+
 ### Protocol 1.0.1 (`openmind-protocol`)
 
 - `action` is described as a double jaw clench (a muscle signal) instead of a

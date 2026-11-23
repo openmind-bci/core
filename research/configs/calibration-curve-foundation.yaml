@@ -1,0 +1,59 @@
+# Calibration curve of a pre-trained EEG foundation model, LaBraM (CORE-060): the
+# protocol of calibration-curve-deep.yaml with LaBraM instead of EEGNet.
+#
+#   uv sync --extra research --extra foundation
+#   caffeinate -i -m -s uv run python research/experiments/calibration_curve.py --config research/configs/calibration-curve-foundation.yaml
+#
+# The pre-trained weights (braindecode/labram-pretrained, about 23 MB) are
+# downloaded from the Hugging Face Hub at the first run into the Hugging Face
+# cache (set HF_HOME=$OPENMIND_DATA_DIR/cache/huggingface to keep them with the
+# data); they are never stored in the repository.
+#
+# For every target subject LaBraM is trained once per seed on the aligned trials
+# of the other subjects (n = 0 of `aligned`: encoder and a new output layer, low
+# learning rate), then adapted to the first n trials per class with `head` (new
+# output layer only) or `full` (every weight). Epochs are resampled 250 -> 200 Hz
+# and rescaled inside the model. Protocol and caveats: docs/evaluation.md,
+# "Foundation model".
+
+name: calibration-curve-foundation
+title: Calibration curve of fine-tuned LaBraM (montage C)
+task: CORE-060
+output: research/results/calibration-curve-foundation.md
+
+seed: 42
+seeds: [0, 1]
+min_epochs_per_class: 10
+models: [labram]
+model_params:
+  labram:
+    ch_names: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]
+    fit_strategy: full
+    max_epochs: 30
+    patience: 8
+    lr: 0.0001
+    batch_size: 32
+    device: auto
+conditions:
+  - generic  # unaligned control: alignment mixes the electrodes LaBraM embeds by name
+  - aligned
+  - aligned+finetune-head
+  - aligned+finetune-full
+n_per_class: [0, 5, 10, 20, 40]
+alignment: {method: riemann}
+min_test_per_class: 10
+unlabeled_start: 20
+
+finetune:
+  epochs: 60
+  patience: 15
+  valid_fraction: 0.2
+  min_validation_trials: 30
+  lr: {head: 0.002, final: 0.0005, adapter: 0.002, full: 0.0001}
+
+experiments:
+  - name: bnci2014_001-3class-c
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right, forward]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]

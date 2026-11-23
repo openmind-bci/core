@@ -49,6 +49,14 @@ deep = [
     "braindecode>=0.8",
     "torch>=2.2",
 ]
+# Pre-trained foundation models (models/foundation.py): weights are downloaded
+# from the Hugging Face Hub at run time, never stored in the repository.
+foundation = [
+    "braindecode>=2.0",
+    "torch>=2.2",
+    "huggingface_hub>=0.20",
+    "safetensors>=0.4",
+]
 
 [project.scripts]
 openmind-core = "openmind_core.cli:app"
