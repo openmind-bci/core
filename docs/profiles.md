@@ -15,6 +15,12 @@ A profile lets a returning user skip most of the calibration. It is managed by
 EEG data are health data (GDPR). Nothing else is stored: no name, no raw
 recording.
 
+`openmind-core online --profile P01 --model NAME` records the model name in
+`profile.json` and, for a model trained on aligned epochs, saves the reference
+estimated during its warm-up in `reference.npz` (unless `--no-save-reference`).
+The next session loads it when its channels equal the model's and skips the
+warm-up.
+
 ## Where
 
 Profiles live in `$OPENMIND_DATA_DIR/profiles/<user>/` (default

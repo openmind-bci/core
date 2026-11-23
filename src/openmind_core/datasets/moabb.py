@@ -2,10 +2,10 @@
 
 For every run of a subject the processing is:
 
-1. keep the motor-imagery electrodes of **montage A** (``FC3, FC4, C3, Cz, C4,
-   CP3, CP4``), in that order. ``Fp1``, the eighth electrode of montage A, is
-   used by the blink detector only and is absent from most motor-imagery
-   datasets, so it is not part of the decoding channels;
+1. keep the motor-imagery electrodes of **montage C** (``FC3, FC4, C3, Cz, C4,
+   CP3, CP4, CPz``), in that order; ``MONTAGE_A_MI`` (the first seven) stays
+   available. ``Fp1``, the eighth electrode of montage A, is never decoded:
+   it is absent from most motor-imagery datasets and dominated by blinks;
 2. convert to microvolts and resample to 250 Hz;
 3. filter **causally** (8-30 Hz band-pass and a notch at the dataset's power-line
    frequency) with :class:`~openmind_core.preprocessing.filters.StreamFilter`,
@@ -38,7 +38,7 @@ from openmind_core.preprocessing.windows import EPOCH_OFFSET_S, WINDOW_S, epochs
 #: Decoding channels: montage A without Fp1, in montage order.
 MONTAGE_A_MI: Final[tuple[str, ...]] = ("FC3", "FC4", "C3", "Cz", "C4", "CP3", "CP4")
 
-#: Decoding channels of montage C: montage A plus CPz (see ``docs/montage.md``).
+#: Decoding channels of montage C, the default: montage A plus CPz (see ``docs/montage.md``).
 MONTAGE_C: Final[tuple[str, ...]] = (*MONTAGE_A_MI, "CPz")
 
 #: Named montages accepted by ``openmind-core train``.
@@ -89,7 +89,7 @@ def load_epochs(
     dataset: str,
     subjects: Sequence[int],
     classes: Sequence[str] | None = None,
-    channels: Sequence[str] = MONTAGE_A_MI,
+    channels: Sequence[str] = MONTAGE_C,
     srate: float = TARGET_SRATE,
     filters: FilterConfig | None = None,
     reject_uv: float | None = REJECT_PTP_UV,
@@ -100,7 +100,7 @@ def load_epochs(
         dataset: Key of :data:`DATASETS` (``"bnci2014_001"``, ``"physionetmi"``).
         subjects: Subject numbers, as numbered by the dataset.
         classes: Commands to keep (default: left, right, forward).
-        channels: Electrodes to keep, in order.
+        channels: Electrodes to keep, in order (default: montage C, 8 electrodes).
         srate: Target sampling rate.
         filters: Filter settings; by default 8-30 Hz with a notch at the dataset's
             power-line frequency.
@@ -167,7 +167,7 @@ def epochs_from_raw(
     session: str,
     dataset: str,
     classes: Sequence[str],
-    channels: Sequence[str] = MONTAGE_A_MI,
+    channels: Sequence[str] = MONTAGE_C,
     srate: float = TARGET_SRATE,
     filters: FilterConfig | None = None,
     reject_uv: float | None = REJECT_PTP_UV,

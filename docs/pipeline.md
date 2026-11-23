@@ -10,14 +10,17 @@ time.
 
 | Use | Electrodes |
 |---|---|
-| Decoding (motor imagery) | `FC3, FC4, C3, Cz, C4, CP3, CP4`: montage A without Fp1 (`MONTAGE_A_MI`) |
-| Double-blink detection | `Fp1` only |
+| Decoding (motor imagery) | `FC3, FC4, C3, Cz, C4, CP3, CP4, CPz`: **montage C**, the default (`MONTAGE_C`; `MONTAGE_A_MI` is its first seven) |
+| `action` (double jaw clench) | the same eight electrodes: a broadband burst on every channel |
+| Double-blink detection (optional) | `Fp1` only, study tool; not used by the online decoder |
 
 **Fp1** is the eighth electrode of montage A. It sits above the left eye and is
-dominated by eye movements and blinks, so it is not used for decoding. Most
+dominated by eye movements and blinks, so it is never decoded. Most
 motor-imagery datasets do not record it: BNCI2014-001 has no Fp1; PhysionetMI
-does. Models trained on public data therefore use the seven decoding channels
-only, and the blink detector runs on the live Fp1 channel.
+does. Models trained on public data use the eight montage C channels, and Fp1
+is optional: the blink detector (`preprocessing.blink`) only runs when a stream
+carries it, as a study tool. The `action` command comes from the jaw
+([action gesture study](action-gesture.md)), read on the motor electrodes.
 
 ## Steps
 
@@ -61,8 +64,8 @@ uv run openmind-core train --dataset bnci2014_001 --subjects 1-9 --model ts-lr \
 
 Needs the `research` extra (datasets), and `deep` for `eegnet` and `shallow`.
 `--subjects` takes ranges and commas (`1-3,5`); `--channels` a montage letter
-(`A`: the seven motor electrodes, `C`: montage A plus CPz) or a comma-separated
-list; `--alignment` is `none`, `euclid` or `riemann`, applied per session as in
+(`C`, the default: the eight motor electrodes; `A`: the first seven, without
+CPz) or a comma-separated list; `--alignment` is `none`, `euclid` or `riemann`, applied per session as in
 the benchmark. The model is fitted on all epochs and registered under
 `<model>-<dataset>-<montage>[-<alignment>]` unless `--name` is given.
 
@@ -117,7 +120,7 @@ step.actions  # times of double jaw clenches
   the first sample when none are given); `actions` use the same clock.
 - The stream must run at the sampling rate of the model: resampling is out of
   scope (the decoder refuses a mismatch).
-- MQTT publication is not part of these modules (it is wired separately).
+- MQTT publication is done by the service below (`openmind-core online`).
 
 ### From probabilities to commands
 
@@ -164,13 +167,59 @@ messages = commands.process(decisions)  # openmind_protocol.Command objects to p
   `summary()` gives count, mean, p50, p95 and max in ms, and `to_event()` builds
   the `decoder` / `latency` event (see `protocol.md`).
 
+### Running the online decoder
+
+`openmind-core online` ties it together: it reads the standard EEG stream
+(the `plug` extra), decodes it with a registered model, and publishes
+`commands` (on change, repeated every 0.5 s), `status` (4 Hz heartbeat) and a
+decoder `latency` event every 10 s. The loop is `online/service.py`
+(`run_online`), independent of LSL and MQTT. It needs a profile
+(`openmind-core profile create P01`) and a model (`openmind-core train`).
+
+Full chain without a headset, one terminal each:
+
+```bash
+# 1. broker
+cd sandbox/dev && docker compose up -d
+# 2. EEG on LSL: synthetic (montage C) or a replayed public dataset
+cd plug && uv run openmind-plug stream --source synthetic --montage C
+#    or: uv run openmind-plug stream --source replay --dataset bnci2014_001 --subject 1
+# 3. model trained on public data, then the decoder
+cd core && uv run openmind-core profile create P01
+uv run openmind-core train --dataset bnci2014_001 --subjects 1-9 \
+    --model ts-lr --channels C --alignment riemann
+uv run openmind-core online --profile P01 --model ts-lr-bnci2014_001-c-riemann
+# 4. an object: the fake robot in a terminal, or the cockpit (gateway + Godot)
+cd sandbox && uv run openmind-sandbox mock-robot
+```
+
+Options:
+
+- `--threshold left=0.6 --threshold forward=0.55`: per-command thresholds;
+  `--windows 4`: predictions averaged per decision (about 1 s).
+- `--warmup-s 30`: for a model trained on aligned epochs without a stored
+  reference, the first 30 s of clean signal give the reference (stay relaxed);
+  the status says `calibrating` / `warm-up 12/30 s`, and commands stay `rest`.
+  The reference is then saved in the profile (`--no-save-reference` to keep it
+  out), so the next session starts at once.
+- `--dry-run`: print each command, no broker. `--quiet`: no live line.
+- `--source-id`, `--timeout`: pick and wait for the LSL stream.
+
+The stream must have the labels and sampling rate of the model (the command
+explains the mismatch otherwise). The profile records the model name.
+
+Safety: the loop publishes the status even when no sample arrives (the reader
+polls at 10 Hz and yields empty blocks), and the state becomes `degraded` after
+2 s without a decoded window, so objects stop. On Ctrl+C (or any exit) a final
+`rest` command and an `idle` status are published at once.
+
 ## Public datasets
 
 ```python
 from openmind_core.datasets import load_epochs
 
 epochs = load_epochs("bnci2014_001", subjects=[1, 2, 3])  # needs the research extra
-epochs.X  # (n_epochs, 7, 500) float32, µV
+epochs.X  # (n_epochs, 8, 500) float32, µV
 epochs.y  # "left", "right", "forward"
 epochs.subject, epochs.session
 ```

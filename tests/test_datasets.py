@@ -8,10 +8,10 @@ import mne
 import numpy as np
 import pytest
 
-from openmind_core.datasets import MONTAGE_A_MI, EpochSet, epochs_from_raw, load_epochs
+from openmind_core.datasets import MONTAGE_C, EpochSet, epochs_from_raw, load_epochs
 from openmind_core.datasets.moabb import _spec
 
-CHANNELS = ["Fz", "Fc3.", "FC4", "C3", "CZ", "C4", "CP3", "CP4", "EOG1"]
+CHANNELS = ["Fz", "Fc3.", "FC4", "C3", "CZ", "C4", "CP3", "CP4", "CPz", "EOG1"]
 
 
 def make_raw(sfreq: float = 160.0, seconds: float = 60.0, line_freq: float = 60.0) -> mne.io.Raw:
@@ -44,9 +44,9 @@ def make_raw(sfreq: float = 160.0, seconds: float = 60.0, line_freq: float = 60.
 
 def test_epochs_have_montage_channels_rate_and_labels() -> None:
     epochs = epochs_from_raw(make_raw(), 3, "0", "test", classes=("left", "right", "forward"))
-    assert epochs.channels == MONTAGE_A_MI
+    assert epochs.channels == MONTAGE_C
     assert epochs.srate == 250.0
-    assert epochs.X.shape == (4, 7, 500)  # tongue and rest dropped, last cue too late
+    assert epochs.X.shape == (4, 8, 500)  # tongue and rest dropped, last cue too late
     assert epochs.X.dtype == np.float32
     assert epochs.y.tolist() == ["left", "right", "forward", "left"]
     assert epochs.subject.tolist() == [3] * 4
@@ -172,7 +172,7 @@ def test_epoch_set_validation() -> None:
 def test_bnci2014_001_subject_1() -> None:
     pytest.importorskip("moabb")
     epochs = load_epochs("bnci2014_001", [1])
-    assert epochs.X.shape == (432, 7, 500)  # 2 sessions x 3 classes x 72 trials
+    assert epochs.X.shape == (432, 8, 500)  # 2 sessions x 3 classes x 72 trials
     assert epochs.counts() == {"forward": 144, "left": 144, "right": 144}
     assert sorted(set(epochs.session.tolist())) == ["0train", "1test"]
     assert 5 < float(np.median(np.ptp(epochs.X, axis=2))) < 100

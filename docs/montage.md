@@ -1,5 +1,9 @@
 # Montage study: an eighth motor electrode, and blinks without Fp1
 
+**Outcome:** montage C (`FC3, FC4, C3, Cz, C4, CP3, CP4, CPz`) is the default
+decoding montage; `action` is read from the jaw on the same electrodes, and
+`Fp1` is optional. The text below is the study that led to this choice.
+
 Montage A uses eight electrodes: seven over the motor cortex for decoding
 (`FC3, FC4, C3, Cz, C4, CP3, CP4`) and `Fp1`, above the left eye, for the
 double blink that triggers `action`. Two questions were measured on public

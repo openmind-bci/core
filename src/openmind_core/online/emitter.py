@@ -64,6 +64,17 @@ class CommandEmitter:
                 out.append(self._make(decision))
         return out
 
+    def force(self, decision: Decision) -> Command:
+        """Build the message for ``decision`` now, whatever was sent before.
+
+        Used for the final ``rest`` when the decoder stops, so objects halt at
+        once even if the last command was already ``rest``.
+        """
+        if decision.command != "action":
+            self._last = decision.command
+            self._last_sent = self._clock()
+        return self._make(decision)
+
     def _make(self, decision: Decision) -> Command:
         message = Command(
             command=decision.command,
