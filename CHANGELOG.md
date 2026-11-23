@@ -11,6 +11,9 @@ are listed under their own heading.
 
 ### Added
 
+- Progress score (`openmind_core.scoring`): per-command accuracy, false start rate and
+  calibration error per block of trials, `ProgressTracker` with `ready` after
+  consecutive passed blocks, `score` messages and profile records.
 - Online band power estimator (`BandPowerEstimator`): alpha, mu and beta power per
   electrode every 100 ms, smoothing, resting baseline and channel quality flags,
   as `bandpower` messages.
