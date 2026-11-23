@@ -11,6 +11,13 @@ are listed under their own heading.
 
 ### Added
 
+- Live calibration epochs (`openmind_core.calibration`): `EpochBuffer` and
+  `CalibrationRecorder` cut the epoch `[cue + 0.5 s, cue + 2.5 s]` of every completed
+  trial like the offline loader, keep all trials, drop interrupted ones and count missed.
+- Staged model update during calibration (`PersonalModel`): personal tangent-space
+  classifier refitted after each block and blended with the generic model, with
+  decreasing `assistance`, block scores and storage in the user profile.
+- Resume mode (`ResumeProtocol`): rest, new reference covariance and cued control trials.
 - Progress score (`openmind_core.scoring`): per-command accuracy, false start rate and
   calibration error per block of trials, `ProgressTracker` with `ready` after
   consecutive passed blocks, `score` messages and profile records.
