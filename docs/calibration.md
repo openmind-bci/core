@@ -110,6 +110,64 @@ The reference covariance of the session is stored with
 `ProfileStore.save_reference`. Epochs themselves are not stored (EEG is health
 data and stays out of the repositories).
 
+## Online adaptation
+
+EEG drifts during a session (electrode impedance, fatigue, posture).
+`openmind_core.online.adaptation` follows it with three bounded, reversible
+mechanisms. It is a library for now: it is not wired into the command line.
+
+```python
+adapter = RecenteringAdapter(half_life_s=120)   # or rate=0.01
+adapter.attach(decoder)                         # follows the decoded windows
+tuner = PseudoLabelTuner()                      # disabled by default
+tuner.attach(decoder)
+personal.pseudo = tuner
+guard = AdaptationGuard(decoder, adapter, personal, tuner, max_drop=0.10)
+
+guard.begin_block()                             # snapshot
+...                                             # trials of the block
+rolled_back = guard.end_block(score.overall)    # or end_block() without cues
+```
+
+**What adapts**
+
+* *Re-centering* (unsupervised): after `min_windows` (20) decoded windows, the
+  alignment reference covariance moves towards the covariance of each window and
+  the whitening is rebuilt (`OnlineDecoder.set_reference`). With `riemann` the
+  move is a step of weight `rate` along the geodesic between the reference and
+  the window; with `euclid` it is a moving average. This follows slow gain and
+  spatial drifts without any label.
+* *Pseudo-labels* (supervised by the model itself): windows whose smoothed top
+  probability exceeds `threshold` (0.9) are added with their predicted label to
+  the training set of the personal model, which is refitted at block ends. They
+  are stored apart from the true calibration labels and limited to 30 % of the
+  set, overall and per class.
+
+**Bounds**
+
+* Each update moves the reference by at most `max_step` (0.05, affine-invariant
+  distance), whatever the window.
+* The total distance to the initial reference is capped at `max_drift` (1.5):
+  an update that would exceed it is not applied, the adapter freezes and
+  `status_message()` reports `adaptation frozen (drift limit)`.
+* The generic model and the initial reference are never modified
+  (`guard.initial_reference` is read-only; `guard.reset()` goes back to it).
+
+**Rollback.** `begin_block()` snapshots the reference, the personal model and
+the pseudo-labels. At `end_block(score)`, if the score is more than `max_drop`
+(0.10) under the best of the last 3 blocks, the state the best block started
+with is restored, adaptation is paused for one block, the rollback is logged
+and `status_message()` returns `adaptation rolled back` for the decoder status.
+The score is the `overall` of the progress tracker; without cues
+`end_block()` uses the mean top probability of the windows decoded in the
+block, an unsupervised proxy that drops when the decoder becomes indecisive.
+
+**Why pseudo-labels are off by default.** The model learns from its own
+decisions: a systematic error is reinforced (confirmation bias) and a confident
+mistake enters the training set as if it were true. Re-centering has no such
+loop, since it never sees a label. Enable `PseudoLabelTuner(enabled=True)` only
+with the rollback guard, and prefer true labels from calibration blocks.
+
 ## Limits
 
 * The personal model is not fitted with source data: with few epochs it can be

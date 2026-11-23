@@ -24,7 +24,8 @@ generic model; it decreases as the user calibrates (``status.assistance``).
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 import joblib
 import numpy as np
@@ -39,10 +40,22 @@ from openmind_core.online.evidence import Decision
 from openmind_core.profiles import ProfileStore
 from openmind_core.scoring import BlockScore, ProgressTracker, ScoreConfig
 
+if TYPE_CHECKING:
+    from openmind_core.online.adaptation import PseudoLabelTuner
+
 FloatArray = npt.NDArray[np.float64]
 
 #: File of the personal classifier in the user's ``weights`` directory.
 PERSONAL_MODEL = "personal.joblib"
+
+
+@dataclass(frozen=True)
+class PersonalState:
+    """Snapshot of the fitted part of a :class:`PersonalModel` (for rollback)."""
+
+    personal: Any
+    weight: float
+    updates: int
 
 
 class PersonalModel:
@@ -96,6 +109,8 @@ class PersonalModel:
         self._personal: Any = None
         self._aligner: Aligner | None = None
         self._since_update = 0
+        #: Optional source of pseudo-labelled windows (see ``online.adaptation``).
+        self.pseudo: PseudoLabelTuner | None = None
         self.set_reference(reference)
 
     # -- state -------------------------------------------------------------------
@@ -118,6 +133,14 @@ class PersonalModel:
             else Aligner.from_reference(covariance, self.card.alignment)
         )
         self._reference_set = covariance is not None
+
+    def get_state(self) -> PersonalState:
+        """Snapshot of the personal classifier (refits build new objects, never mutate)."""
+        return PersonalState(self._personal, self.weight, self.updates)
+
+    def set_state(self, state: PersonalState) -> None:
+        """Restore a snapshot taken with :meth:`get_state`."""
+        self._personal, self.weight, self.updates = state.personal, state.weight, state.updates
 
     # -- prediction ----------------------------------------------------------------
 
@@ -173,6 +196,15 @@ class PersonalModel:
             if self._aligner is None:
                 return False  # the windows' reference is not known yet
             X = np.asarray(self._aligner.transform(X), dtype=np.float64)
+        if self.pseudo is not None:
+            extra_x, extra_y = self.pseudo.training_set(
+                {c: int(np.sum(y == c)) for c in self.card.classes}
+            )
+            if len(extra_y) > 0:
+                if self._aligner is not None:
+                    extra_x = np.asarray(self._aligner.transform(extra_x), dtype=np.float64)
+                X = np.concatenate([X, extra_x])
+                y = np.concatenate([y, extra_y])
         model = ts_lr(self.c)
         model.fit(X, y)
         self._personal = model

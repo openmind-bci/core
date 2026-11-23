@@ -11,6 +11,11 @@ are listed under their own heading.
 
 ### Added
 
+- Online adaptation with safeguards (`openmind_core.online.adaptation`): bounded
+  Riemannian re-centering of the alignment reference (`RecenteringAdapter`), optional
+  capped pseudo-labels (`PseudoLabelTuner`, off by default) and `AdaptationGuard`
+  (frozen initial model and reference, snapshots, automatic rollback when the score
+  drops); `OnlineDecoder.set_reference` and window hooks. Not wired into the CLI yet.
 - Live calibration epochs (`openmind_core.calibration`): `EpochBuffer` and
   `CalibrationRecorder` cut the epoch `[cue + 0.5 s, cue + 2.5 s]` of every completed
   trial like the offline loader, keep all trials, drop interrupted ones and count missed.

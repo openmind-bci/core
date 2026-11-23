@@ -29,6 +29,7 @@ publication, which come next.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -182,6 +183,7 @@ class OnlineDecoder:
                 )
             self._aligner = Aligner.from_reference(reference.covariance, str(card.alignment))
         self._count = 0  # samples pushed so far
+        self._hooks: list[Callable[[FloatArray, Prediction], None]] = []
 
     @property
     def state(self) -> str:
@@ -192,6 +194,34 @@ class OnlineDecoder:
     def reference_covariance(self) -> FloatArray | None:
         """Reference covariance in use (to store in the profile), ``None`` before it is known."""
         return None if self._aligner is None else np.asarray(self._aligner.reference_)
+
+    def set_reference(self, covariance: npt.ArrayLike) -> None:
+        """Replace the alignment reference (online adaptation, rollback).
+
+        Ends the warm-up if it was running. Windows already decoded are not
+        recomputed.
+
+        Raises:
+            ValueError: If the model does not use alignment, or the matrix has
+                the wrong shape or is not positive definite.
+        """
+        if not self._needs_alignment:
+            raise ValueError(f"model {self.card.name!r} does not use alignment")
+        matrix = np.asarray(covariance, dtype=np.float64)
+        n = len(self.card.channels)
+        if matrix.shape != (n, n):
+            raise ValueError(f"expected a ({n}, {n}) covariance, got shape {matrix.shape}")
+        self._aligner = Aligner.from_reference(matrix, str(self.card.alignment))
+        self._warmup = []
+
+    def add_window_hook(self, hook: Callable[[FloatArray, Prediction], None]) -> None:
+        """Call ``hook(window, prediction)`` after each decoded window.
+
+        ``window`` is the filtered, not yet aligned ``(n_channels, n_times)``
+        window; ``prediction.ok`` is true. The hook may call :meth:`set_reference`:
+        the change applies to the following windows.
+        """
+        self._hooks.append(hook)
 
     def push(self, block: npt.ArrayLike, timestamps: npt.ArrayLike | None = None) -> DecoderStep:
         """Process the next samples.
@@ -253,6 +283,9 @@ class OnlineDecoder:
             self._warmup = []
         x = window if self._aligner is None else self._aligner.transform(window)
         proba = np.asarray(self.model.predict_proba(np.asarray(x)[None]))[0]
-        return Prediction(
+        prediction = Prediction(
             stamp, {c: float(p) for c, p in zip(self.card.classes, proba, strict=True)}, True
         )
+        for hook in self._hooks:
+            hook(window, prediction)
+        return prediction
