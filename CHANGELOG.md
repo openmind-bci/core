@@ -9,6 +9,13 @@ are listed under their own heading.
 
 ## [Unreleased]
 
+### Changed
+
+- Decoding channels default to montage C (eight electrodes, with `CPz`) instead of
+  `MONTAGE_A_MI` (seven): `load_epochs` and `epochs_from_raw`. `MONTAGE_A_MI`
+  stays exported, and `--channels A` still trains on seven electrodes. Fp1 is
+  optional and never decoded. Research configs keep their explicit channels.
+
 ### Added
 
 - Online band power estimator (`BandPowerEstimator`): alpha, mu and beta power per

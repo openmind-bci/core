@@ -10,14 +10,17 @@ time.
 
 | Use | Electrodes |
 |---|---|
-| Decoding (motor imagery) | `FC3, FC4, C3, Cz, C4, CP3, CP4`: montage A without Fp1 (`MONTAGE_A_MI`) |
-| Double-blink detection | `Fp1` only |
+| Decoding (motor imagery) | `FC3, FC4, C3, Cz, C4, CP3, CP4, CPz`: **montage C**, the default (`MONTAGE_C`; `MONTAGE_A_MI` is its first seven) |
+| `action` (double jaw clench) | the same eight electrodes: a broadband burst on every channel |
+| Double-blink detection (optional) | `Fp1` only, study tool; not used by the online decoder |
 
 **Fp1** is the eighth electrode of montage A. It sits above the left eye and is
-dominated by eye movements and blinks, so it is not used for decoding. Most
+dominated by eye movements and blinks, so it is never decoded. Most
 motor-imagery datasets do not record it: BNCI2014-001 has no Fp1; PhysionetMI
-does. Models trained on public data therefore use the seven decoding channels
-only, and the blink detector runs on the live Fp1 channel.
+does. Models trained on public data use the eight montage C channels, and Fp1
+is optional: the blink detector (`preprocessing.blink`) only runs when a stream
+carries it, as a study tool. The `action` command comes from the jaw
+([action gesture study](action-gesture.md)), read on the motor electrodes.
 
 ## Steps
 
@@ -61,8 +64,8 @@ uv run openmind-core train --dataset bnci2014_001 --subjects 1-9 --model ts-lr \
 
 Needs the `research` extra (datasets), and `deep` for `eegnet` and `shallow`.
 `--subjects` takes ranges and commas (`1-3,5`); `--channels` a montage letter
-(`A`: the seven motor electrodes, `C`: montage A plus CPz) or a comma-separated
-list; `--alignment` is `none`, `euclid` or `riemann`, applied per session as in
+(`C`, the default: the eight motor electrodes; `A`: the first seven, without
+CPz) or a comma-separated list; `--alignment` is `none`, `euclid` or `riemann`, applied per session as in
 the benchmark. The model is fitted on all epochs and registered under
 `<model>-<dataset>-<montage>[-<alignment>]` unless `--name` is given.
 
@@ -216,7 +219,7 @@ polls at 10 Hz and yields empty blocks), and the state becomes `degraded` after
 from openmind_core.datasets import load_epochs
 
 epochs = load_epochs("bnci2014_001", subjects=[1, 2, 3])  # needs the research extra
-epochs.X  # (n_epochs, 7, 500) float32, µV
+epochs.X  # (n_epochs, 8, 500) float32, µV
 epochs.y  # "left", "right", "forward"
 epochs.subject, epochs.session
 ```
