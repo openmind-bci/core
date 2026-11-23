@@ -138,6 +138,15 @@ uv run openmind-core train --dataset bnci2014_001 --subjects 1-9 \
 # registered as ts-lr-bnci2014_001-c-riemann in $OPENMIND_DATA_DIR/models
 ```
 
+Decode a live stream and publish commands (needs the `plug` extra, a broker and a
+profile; the first 30 s of an aligned model are a warm-up, then the reference is
+saved in the profile). Add `--dry-run` to print the decisions without a broker:
+
+```bash
+uv run openmind-core profile create P01
+uv run openmind-core online --profile P01 --model ts-lr-bnci2014_001-c-riemann
+```
+
 Feed the 3D brain of the sandbox from a Plug stream (add `--dry-run` to print the
 frames instead of publishing them, no broker needed):
 

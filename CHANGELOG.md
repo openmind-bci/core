@@ -19,6 +19,12 @@ are listed under their own heading.
 - `openmind-core bandpower`: reads the standard EEG stream and publishes the
   band power at up to `--rate` Hz, with a resting baseline (`--baseline-s`),
   expected electrodes (`--expected`) and `--dry-run` (no broker).
+- `run_online` (`openmind_core.online.service`): decoder, evidence and emitters wired
+  to publish `commands`, `status` heartbeat and `latency` events; final `rest` and
+  `idle` status on exit.
+- `openmind-core online`: decodes the standard EEG stream with a registered model and
+  publishes over MQTT; per-command thresholds, warm-up reference saved in the profile,
+  `--dry-run` and a live line.
 
 ### Protocol 1.0.1 (`openmind-protocol`)
 

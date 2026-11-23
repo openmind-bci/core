@@ -117,7 +117,7 @@ step.actions  # times of double jaw clenches
   the first sample when none are given); `actions` use the same clock.
 - The stream must run at the sampling rate of the model: resampling is out of
   scope (the decoder refuses a mismatch).
-- MQTT publication is not part of these modules (it is wired separately).
+- MQTT publication is done by the service below (`openmind-core online`).
 
 ### From probabilities to commands
 
@@ -163,6 +163,52 @@ messages = commands.process(decisions)  # openmind_protocol.Command objects to p
   between the arrival of the last sample of its window and the publication.
   `summary()` gives count, mean, p50, p95 and max in ms, and `to_event()` builds
   the `decoder` / `latency` event (see `protocol.md`).
+
+### Running the online decoder
+
+`openmind-core online` ties it together: it reads the standard EEG stream
+(the `plug` extra), decodes it with a registered model, and publishes
+`commands` (on change, repeated every 0.5 s), `status` (4 Hz heartbeat) and a
+decoder `latency` event every 10 s. The loop is `online/service.py`
+(`run_online`), independent of LSL and MQTT. It needs a profile
+(`openmind-core profile create P01`) and a model (`openmind-core train`).
+
+Full chain without a headset, one terminal each:
+
+```bash
+# 1. broker
+cd sandbox/dev && docker compose up -d
+# 2. EEG on LSL: synthetic (montage C) or a replayed public dataset
+cd plug && uv run openmind-plug stream --source synthetic --montage C
+#    or: uv run openmind-plug stream --source replay --dataset bnci2014_001 --subject 1
+# 3. model trained on public data, then the decoder
+cd core && uv run openmind-core profile create P01
+uv run openmind-core train --dataset bnci2014_001 --subjects 1-9 \
+    --model ts-lr --channels C --alignment riemann
+uv run openmind-core online --profile P01 --model ts-lr-bnci2014_001-c-riemann
+# 4. an object: the fake robot in a terminal, or the cockpit (gateway + Godot)
+cd sandbox && uv run openmind-sandbox mock-robot
+```
+
+Options:
+
+- `--threshold left=0.6 --threshold forward=0.55`: per-command thresholds;
+  `--windows 4`: predictions averaged per decision (about 1 s).
+- `--warmup-s 30`: for a model trained on aligned epochs without a stored
+  reference, the first 30 s of clean signal give the reference (stay relaxed);
+  the status says `calibrating` / `warm-up 12/30 s`, and commands stay `rest`.
+  The reference is then saved in the profile (`--no-save-reference` to keep it
+  out), so the next session starts at once.
+- `--dry-run`: print each command, no broker. `--quiet`: no live line.
+- `--source-id`, `--timeout`: pick and wait for the LSL stream.
+
+The stream must have the labels and sampling rate of the model (the command
+explains the mismatch otherwise). The profile records the model name.
+
+Safety: the loop publishes the status even when no sample arrives (the reader
+polls at 10 Hz and yields empty blocks), and the state becomes `degraded` after
+2 s without a decoded window, so objects stop. On Ctrl+C (or any exit) a final
+`rest` command and an `idle` status are published at once.
 
 ## Public datasets
 

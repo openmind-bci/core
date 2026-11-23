@@ -5,13 +5,12 @@ Subcommands:
 * ``info``: versions and data directory;
 * ``profile create|list|show|delete``: local pseudonymized user profiles;
 * ``train``: train a model on a public dataset and register it;
-* ``bandpower``: publish the band power per electrode for the 3D brain.
-
-``online`` is added by a later task.
+* ``bandpower``: publish the band power per electrode for the 3D brain;
+* ``online``: decode the EEG stream with a registered model and publish commands.
 """
 
 import json
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -355,3 +354,229 @@ def bandpower(
         inlet.close()
         if publisher is not None:
             publisher.close()
+
+
+def _parse_thresholds(values: list[str]) -> dict[str, float]:
+    """``["left=0.6", "forward=0.55"]`` to a dict, validated."""
+    from openmind_core.online.evidence import MOVEMENTS
+
+    out: dict[str, float] = {}
+    for item in values:
+        name, separator, number = item.partition("=")
+        name = name.strip()
+        if not separator or name not in MOVEMENTS:
+            raise typer.BadParameter(
+                f"expected <command>=<value> with command in {list(MOVEMENTS)}"
+            )
+        try:
+            value = float(number)
+        except ValueError:
+            raise typer.BadParameter(f"{item!r}: {number!r} is not a number") from None
+        if not 0.0 < value <= 1.0:
+            raise typer.BadParameter(f"{item!r}: threshold must be in ]0, 1]")
+        out[name] = value
+    return out
+
+
+@app.command("online")
+def online(
+    profile: Annotated[
+        str, typer.Option(help="Pseudonymized profile id, e.g. P01.", callback=_user_id)
+    ],
+    model: Annotated[str, typer.Option(help="Registry name of the model (see `train`).")],
+    broker: Annotated[
+        str, typer.Option(help="MQTT broker as host[:port].", show_default=True)
+    ] = "localhost:1883",
+    source_id: Annotated[
+        str | None, typer.Option(help="LSL source_id of the EEG stream to read.")
+    ] = None,
+    timeout: Annotated[float, typer.Option(min=0.1, help="Seconds to wait for the stream.")] = 10.0,
+    warmup_s: Annotated[
+        float,
+        typer.Option(min=1.0, help="Seconds of clean signal to estimate the alignment reference."),
+    ] = 30.0,
+    threshold: Annotated[
+        list[str] | None,
+        typer.Option(help="Per-command threshold, repeatable: --threshold left=0.6."),
+    ] = None,
+    windows: Annotated[
+        int, typer.Option(min=1, help="Predictions averaged per decision (4 is about 1 s).")
+    ] = 4,
+    save_reference: Annotated[
+        bool,
+        typer.Option(
+            "--save-reference/--no-save-reference",
+            help="Store the warm-up reference in the profile.",
+        ),
+    ] = True,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Print the decisions; no broker needed.")
+    ] = False,
+    quiet: Annotated[bool, typer.Option("--quiet", help="No live line.")] = False,
+) -> None:
+    """Decode the EEG stream with a model and publish commands and status over MQTT."""
+    try:
+        from openmind_plug.inlet import EEGInlet
+    except ImportError as error:
+        typer.echo(
+            "openmind-plug is required to read the EEG stream. Install it with "
+            "`uv sync --extra plug` (or `pip install openmind-plug`).",
+            err=True,
+        )
+        raise typer.Exit(1) from error
+
+    import time
+    from collections.abc import Callable, Iterator
+
+    import numpy.typing as npt
+
+    from openmind_core.bus import BrokerUnavailableError, Publisher
+    from openmind_core.models.registry import list_models, load_model
+    from openmind_core.online import (
+        CommandEmitter,
+        EvidenceAccumulator,
+        EvidenceConfig,
+        HealthMonitor,
+        LatencyMeter,
+        OnlineConfig,
+        OnlineDecoder,
+        StatusEmitter,
+    )
+    from openmind_core.online.decoder import FloatArray
+    from openmind_core.online.service import run_online
+    from openmind_core.profiles import ProfileNotFoundError
+    from openmind_protocol import Command, Message, Status
+
+    host, port = _broker(broker)
+    thresholds = dict(EvidenceConfig().thresholds) | _parse_thresholds(threshold or [])
+    store = _store()
+    try:
+        store.get(profile)
+    except ProfileNotFoundError as error:
+        raise _fail(
+            f"no profile for user {profile}. Create it with `openmind-core profile create "
+            f"{profile}`."
+        ) from error
+    try:
+        net, card = load_model(model)
+    except FileNotFoundError as error:
+        known = ", ".join(c.name for c in list_models()) or "none"
+        raise _fail(
+            f"no model named {model!r} (registered: {known}). Train one with "
+            "`openmind-core train --dataset bnci2014_001 --subjects 1-9 --channels C`."
+        ) from error
+    except (ImportError, ValueError) as error:
+        raise _fail(f"cannot load model {model!r}: {error}") from error
+
+    reference = None
+    stored = store.load_reference(profile)
+    if card.alignment is not None and stored is not None:
+        if tuple(stored.channels) == tuple(card.channels):
+            reference = stored
+        else:
+            typer.echo(
+                f"note: the stored reference of {profile} has other channels "
+                f"({','.join(stored.channels)}) than the model ({','.join(card.channels)}); "
+                "a new one will be estimated.",
+                err=True,
+            )
+
+    state: dict[str, Any] = {"command": "-", "confidence": 0.0, "printed": 0.0}
+
+    def show(message: Message) -> None:
+        if isinstance(message, Command):
+            state["command"], state["confidence"] = message.command, message.confidence
+            if dry_run:
+                typer.echo(
+                    f"{message.ts:.2f} {message.command:<8} {message.confidence:.2f} "
+                    f"seq={message.seq}"
+                )
+        elif isinstance(message, Status) and not quiet and not dry_run:
+            now = time.monotonic()
+            if now - state["printed"] >= 0.25:
+                state["printed"] = now
+                text = f"{message.state:<11} {state['command']:<8} {state['confidence']:.2f}"
+                if message.message:
+                    text += f"  ({message.message})"
+                typer.echo(f"\r{text:<70}", nl=False)
+
+    publisher: Publisher | None = None
+    publish: Callable[[Message], None] = show
+    if not dry_run:
+        publisher = Publisher(host, port)
+        try:
+            publisher.connect()
+        except BrokerUnavailableError as error:
+            typer.echo(f"Error: {error}", err=True)
+            raise typer.Exit(1) from error
+        sent = publisher.publish
+
+        def publish(message: Message) -> None:
+            sent(message)
+            show(message)
+
+    def cleanup(inlet: object | None = None) -> None:
+        if inlet is not None:
+            inlet.close()  # type: ignore[attr-defined]
+        if publisher is not None:
+            time.sleep(0.2)  # let the network thread send the last messages
+            publisher.close()
+
+    try:
+        inlet = EEGInlet(timeout=timeout, source_id=source_id, with_markers=False)
+    except TimeoutError as error:
+        typer.echo(f"Error: no EEG stream found ({error}). Start `openmind-plug stream`.", err=True)
+        cleanup()
+        raise typer.Exit(1) from error
+
+    try:
+        decoder = OnlineDecoder(
+            net,
+            card,
+            list(inlet.info.labels),
+            inlet.info.srate,
+            OnlineConfig(warmup_s=warmup_s),
+            reference=reference,
+        )
+    except ValueError as error:
+        cleanup(inlet)
+        raise _fail(f"stream {inlet.source_id} does not fit model {model!r}: {error}") from error
+
+    def keep_reference(covariance: FloatArray) -> None:
+        if save_reference:
+            store.save_reference(profile, covariance, card.channels)
+            typer.echo(f"\nReference saved in profile {profile}.")
+
+    try:
+        store.update(profile, model=model)
+        accumulator = EvidenceAccumulator(
+            card.classes,
+            EvidenceConfig(windows=windows, min_ok=min(2, windows), thresholds=thresholds),
+        )
+        typer.echo(
+            f"Decoding {inlet.source_id} ({inlet.info.srate:g} Hz) with {model} for {profile}"
+            f"{' (dry run)' if dry_run else f' -> {host}:{port}'}; Ctrl+C to stop."
+        )
+        if decoder.state == "calibrating":
+            typer.echo(f"Warm-up: stay relaxed, eyes open, for {warmup_s:g} s...")
+
+        def blocks() -> Iterator[tuple[npt.ArrayLike, npt.ArrayLike]]:
+            while True:
+                yield inlet.read(timeout=0.1)  # empty on timeout: keeps the status flowing
+
+        stats = run_online(
+            blocks(),
+            publish,
+            decoder=decoder,
+            accumulator=accumulator,
+            command_emitter=CommandEmitter(profile),
+            status_emitter=StatusEmitter(model, profile),
+            health=HealthMonitor(),
+            latency=LatencyMeter(),
+            on_reference=keep_reference if reference is None else None,
+        )
+        typer.echo(f"\nStopped after {stats.duration_s:.0f} s: {stats.commands}")
+    except KeyboardInterrupt:
+        typer.echo("\nStopped (rest published, status idle).")
+    finally:
+        cleanup(inlet)
