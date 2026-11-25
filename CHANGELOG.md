@@ -68,6 +68,12 @@ are listed under their own heading.
   `fine_tune()` strategies of the deep models, and
   `research/configs/calibration-curve-foundation.yaml`.
 
+### Fixed
+
+- `run_online` no longer hides the error that ended the loop (a decoder failure, say)
+  when publishing the final `rest` command or `idle` status also fails (a lost
+  broker): the publish failure is logged and the original error is raised.
+
 ### Protocol 1.0.1 (`openmind-protocol`)
 
 - `action` is described as a double jaw clench (a muscle signal) instead of a
