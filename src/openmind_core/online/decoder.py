@@ -173,6 +173,8 @@ class OnlineDecoder:
         self._aligner: Aligner | None = None
         self._needs_alignment = card.alignment is not None
         self._warmup: list[FloatArray] = []
+        self._warmup_samples = 0  # distinct samples covered by the warm-up windows
+        self._warmup_end: int | None = None  # end sample of the last warm-up window
         if self._needs_alignment and reference is not None:
             if tuple(_normalize(c) for c in reference.channels) != tuple(
                 _normalize(c) for c in card.channels
@@ -212,7 +214,7 @@ class OnlineDecoder:
         if matrix.shape != (n, n):
             raise ValueError(f"expected a ({n}, {n}) covariance, got shape {matrix.shape}")
         self._aligner = Aligner.from_reference(matrix, str(self.card.alignment))
-        self._warmup = []
+        self._reset_warmup()
 
     def add_window_hook(self, hook: Callable[[FloatArray, Prediction], None]) -> None:
         """Call ``hook(window, prediction)`` after each decoded window.
@@ -255,7 +257,7 @@ class OnlineDecoder:
             for window in self._window.push(self._filter(segment)):
                 end = stop - 1
                 stamp = (start + end) / self.srate if times is None else float(times[end])
-                predictions.append(self._decode(window, stamp, muscle))
+                predictions.append(self._decode(window, stamp, muscle, start + stop))
             pos = stop
         self._count += n
         return DecoderStep(predictions, actions)
@@ -269,18 +271,28 @@ class OnlineDecoder:
             return first - count
         return step - (count - first) % step
 
-    def _decode(self, window: FloatArray, stamp: float, muscle: bool) -> Prediction:
+    def _reset_warmup(self) -> None:
+        self._warmup = []
+        self._warmup_samples = 0
+        self._warmup_end = None
+
+    def _decode(self, window: FloatArray, stamp: float, muscle: bool, end: int) -> Prediction:
         if muscle:
             return Prediction(stamp, None, False, "muscle")
         if not amplitude_mask(window[None], self.config.reject_uv)[0]:
             return Prediction(stamp, None, False, "rejected")
         if self._needs_alignment and self._aligner is None:
+            # Count the samples the accepted windows actually cover: after rejected
+            # windows the next accepted one adds more than a step of new signal.
+            n_times = self._window.n_times
+            new = n_times if self._warmup_end is None else min(n_times, end - self._warmup_end)
             self._warmup.append(window)
-            span = (len(self._warmup) - 1) * self._window.step + self._window.n_times
-            if span < self.config.warmup_s * self.srate:
+            self._warmup_samples += new
+            self._warmup_end = end
+            if self._warmup_samples < self.config.warmup_s * self.srate:
                 return Prediction(stamp, None, False, "warmup")
             self._aligner = Aligner(str(self.card.alignment)).fit(np.stack(self._warmup))
-            self._warmup = []
+            self._reset_warmup()
         x = window if self._aligner is None else self._aligner.transform(window)
         proba = np.asarray(self.model.predict_proba(np.asarray(x)[None]))[0]
         prediction = Prediction(

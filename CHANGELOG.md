@@ -68,6 +68,13 @@ are listed under their own heading.
   `fine_tune()` strategies of the deep models, and
   `research/configs/calibration-curve-foundation.yaml`.
 
+### Fixed
+
+- Online warm-up: the alignment reference now ends once the accepted windows cover
+  `warmup_s` seconds of distinct signal. It used to assume the windows were
+  contiguous, which kept the warm-up running longer than needed after rejected
+  windows.
+
 ### Protocol 1.0.1 (`openmind-protocol`)
 
 - `action` is described as a double jaw clench (a muscle signal) instead of a
