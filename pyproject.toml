@@ -107,6 +107,11 @@ target-version = "py311"
 src = ["src", "tests", "protocol/src", "protocol/tests"]
 extend-include = ["*.ipynb"]
 
+[tool.ruff.format]
+# ruff formats Python code blocks in Markdown and breaks the aligned comments
+# of the docs examples; the docs are written by hand.
+exclude = ["*.md"]
+
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "N", "UP", "B", "SIM", "NPY", "RUF"]
 
