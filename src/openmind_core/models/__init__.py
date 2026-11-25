@@ -13,10 +13,13 @@ from openmind_core.models.baselines import BASELINES, csp_lda, make_baseline, md
 #: Deep architectures, available with the ``deep`` extra.
 DEEP_MODELS: Final[tuple[str, ...]] = ("eegnet", "shallow")
 
+#: Pre-trained foundation models (``deep`` extra plus ``huggingface_hub``), research only.
+FOUNDATION_MODELS: Final[tuple[str, ...]] = ("labram",)
+
 
 def model_names() -> tuple[str, ...]:
     """Every model :func:`make_model` can build."""
-    return (*sorted(BASELINES), *DEEP_MODELS)
+    return (*sorted(BASELINES), *DEEP_MODELS, *FOUNDATION_MODELS)
 
 
 def make_model(name: str, srate: float = 250.0, seed: int = 0, **params: Any) -> Any:
@@ -24,7 +27,8 @@ def make_model(name: str, srate: float = 250.0, seed: int = 0, **params: Any) ->
 
     Args:
         name: A baseline (``csp-lda``, ``mdm``, ``ts-lr``) or a deep
-            architecture (``eegnet``, ``shallow``).
+            architecture (``eegnet``, ``shallow``) or a foundation model
+            (``labram``, see :mod:`openmind_core.models.foundation`).
         srate: Sampling rate of the epochs (deep models only).
         seed: Random seed (deep models only).
         **params: Training settings of deep models (see ``DeepClassifier``).
@@ -43,12 +47,21 @@ def make_model(name: str, srate: float = 250.0, seed: int = 0, **params: Any) ->
         except ImportError as error:  # pragma: no cover - depends on the environment
             raise ImportError("deep models need the deep extra (torch, braindecode)") from error
         return DeepClassifier(architecture=name, srate=srate, seed=seed, **params)
+    if name in FOUNDATION_MODELS:
+        try:
+            from openmind_core.models.foundation import FoundationClassifier
+        except ImportError as error:  # pragma: no cover - depends on the environment
+            raise ImportError(
+                "foundation models need the deep extra (torch, braindecode)"
+            ) from error
+        return FoundationClassifier(srate=srate, seed=seed, **params)
     raise KeyError(f"unknown model {name!r}; available: {list(model_names())}")
 
 
 __all__ = [
     "BASELINES",
     "DEEP_MODELS",
+    "FOUNDATION_MODELS",
     "csp_lda",
     "make_baseline",
     "make_model",

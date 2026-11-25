@@ -137,6 +137,10 @@ def save_model(
     validate_name(name)
     if alignment is not None and alignment not in ("euclid", "riemann"):
         raise ValueError(f"unknown alignment {alignment!r}")
+    if getattr(model, "research_only", False):
+        raise ValueError(
+            f"{type(model).__name__} models are research only for now and cannot be registered"
+        )
     deep = _is_deep(model)
     if deep:
         if not hasattr(model, "module_"):

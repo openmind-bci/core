@@ -259,6 +259,81 @@ caffeinate -i -m -s uv run python research/experiments/calibration_curve.py \
     --config research/configs/calibration-curve-deep.yaml
 ```
 
+### Foundation model
+
+`research/configs/calibration-curve-foundation.yaml` adds a pre-trained EEG
+foundation model as a competitor, on the same protocol (montage C, three
+classes, `aligned`, `aligned+finetune-head`, `aligned+finetune-full`,
+0/5/10/20/40 trials per class, two seeds).
+Code: `openmind_core.models.foundation.FoundationClassifier` (model name
+`labram`, `uv sync --extra research --extra foundation`).
+
+**Choice: LaBraM** (Jiang et al., ICLR 2024; 5.8 M parameters, 12-layer
+transformer, pre-trained on about 2 500 hours of EEG), loaded with Braindecode's
+`Labram.from_pretrained("braindecode/labram-pretrained")`. Reasons: (1) it names
+every channel and all eight electrodes of montage C (`FC3 FC4 C3 Cz C4 CP3 CP4
+CPz`) are among its 128 position embeddings, so a headset with eight electrodes
+needs no interpolation or template; (2) the weights load with Braindecode 2.0 and
+our channel names (checked: a forward pass on eight channels, 2 s windows, works);
+(3) the research note reports that its personal gains survive across sessions.
+MIRepNet (motor-imagery specific) remains the other candidate: Braindecode 2.0
+has a `MIRepNet` class, but its weights (`starself/MIRepNet`) were not tried here.
+`CBraMod`, `EEGPT` and `REVE` classes exist in the installed Braindecode too.
+
+**Licence of the weights.** The model card of `braindecode/labram-pretrained`
+declares `license: bsd-3-clause` in its metadata and says nothing more about the
+weights; the original LaBraM code is MIT. The weights were trained on corpora
+with their own terms (mostly the TUH EEG corpus, research use after
+registration), which the card does not restate. We therefore use them for
+research only: they are downloaded at run time into the Hugging Face cache
+(`HF_HOME`, for example `$OPENMIND_DATA_DIR/cache/huggingface`), never committed
+and never redistributed, and neither are fine-tuned copies (the model registry
+refuses `labram`).
+
+**What differs from EEGNet.**
+
+| Aspect | EEGNet | LaBraM |
+|---|---|---|
+| Sampling rate | 250 Hz | 200 Hz: epochs resampled by 4/5 (`resample_poly`) inside the model |
+| Input scale | per-channel std = 1 | per-channel std = 0.2 (about 20 µV / 100 µV, the scale of its pre-training) |
+| Window | 2 s | 2 s = two one-second patches per channel, 16 tokens + one class token |
+| Channels | positions only | named: each channel selects its position embedding |
+| Output layer | trained | new linear layer (the checkpoint has none) |
+| `final` strategy | last block | last transformer block, final norms, output layer |
+| Source training (`fit`) | from scratch | the whole network at a low learning rate (`fit_strategy: full`; `head` or `final` freeze more) |
+
+Frozen modules stay in evaluation mode, as for EEGNet. Everything else (alignment,
+calibration trials, test trials, seeds, early stopping) is shared with the other
+deep conditions.
+
+**Caveat on alignment.** The input of every deep model is the *aligned* epochs
+(Riemannian re-centering whitens the covariance), so the channels are spatial
+mixtures rather than electrodes: LaBraM's position embeddings, which assume real
+electrodes, are only approximately meaningful. This is the same pipeline as
+EEGNet's, which keeps the comparison fair, but a `generic` (unaligned) condition
+would be the more natural input for LaBraM.
+
+**Cost.** The encoder has 5.8 M weights (EEGNet: about 2 000) and the weights file
+is 23 MB. Smoke run (subject 1 of BNCI2014_001 as target, one seed, `n` = 0 and
+10, four source epochs on about 3 400 aligned trials, 20 fine-tuning epochs, CPU
+shared with two other benchmarks): 41 s for the whole subject, of which most is
+pre-training. The full configuration (up to 30 source epochs with early stopping,
+60 fine-tuning epochs, five values of `n`, 9 subjects x 2 seeds) is estimated at
+1.5 to 3 hours on a laptop CPU, i.e. 5 to 10 minutes per subject and seed; the
+smoke accuracy (73 % at every `n`) says nothing yet about the final comparison.
+
+```bash
+uv sync --extra research --extra foundation
+export HF_HOME=$OPENMIND_DATA_DIR/cache/huggingface
+caffeinate -i -m -s uv run python research/experiments/calibration_curve.py \
+    --config research/configs/calibration-curve-foundation.yaml
+```
+
+Offline, `FoundationClassifier` raises a `RuntimeError` naming the repository;
+without `huggingface_hub`, an `ImportError` pointing to the `foundation` extra.
+Tests use a randomly initialized network and never download; the test that loads
+the real weights is marked `slow`.
+
 ### Similarity-based cold start
 
 `research/configs/calibration-curve-coldstart.yaml` asks, at `n = 0`, whether the
