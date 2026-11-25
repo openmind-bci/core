@@ -9,6 +9,12 @@ are listed under their own heading.
 
 ## [Unreleased]
 
+### Fixed
+
+- The `deep` and `foundation` extras install the CPU build of `torchaudio` on
+  Linux and Windows, like `torch`: the PyPI wheel pulled by braindecode needs
+  the CUDA runtime and failed to import on machines without it.
+
 ### Changed
 
 - Decoding channels default to montage C (eight electrodes, with `CPz`) instead of
