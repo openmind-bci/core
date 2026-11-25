@@ -47,6 +47,9 @@ are listed under their own heading.
 - `openmind-core online`: decodes the standard EEG stream with a registered model and
   publishes over MQTT; per-command thresholds, warm-up reference saved in the profile,
   `--dry-run` and a live line.
+- Calibration curve experiment (`openmind_core.calibration`, `research/experiments/calibration_curve.py`):
+  accuracy versus number of calibration trials for generic, aligned,
+  aligned + tuned and from-scratch decoders, on a new user's session.
 
 ### Protocol 1.0.1 (`openmind-protocol`)
 

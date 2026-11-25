@@ -153,6 +153,76 @@ experiment, the model settings and the Git version of `src/`; changing any of
 them recomputes the experiment (`--fresh` forces it). Run long benchmarks under
 `caffeinate -i -m -s` on macOS so that the computer does not sleep.
 
+## Calibration curve
+
+The main question of OpenMind: how many calibration trials does a **new user**
+need? `openmind_core.calibration` and `research/experiments/calibration_curve.py`
+(configuration `research/configs/calibration-curve.yaml`, results in
+`research/results/calibration-curve.md`) answer it with the following protocol.
+
+**Scenario.** A new user, one session. For each target subject (leave one subject
+out) and each of its sessions separately:
+
+- the **calibration set** is the first `n` trials *per class* of the session, in
+  time order (`n` from `n_per_class`, default 0, 5, 10, 20, 40). An `n` the
+  session cannot provide while leaving at least 10 test trials per class
+  (`min_test_per_class`) is skipped;
+- the **test set** is every trial after the last calibration trial. Each `n` has
+  its own test set, so the curve alone would be measured on shrinking data. The
+  **common test set** therefore starts after the largest feasible `n` of the
+  session and is the same for every `n`: the main table uses it, the CSV and the
+  second table of each model also keep the accuracy on each `n`'s own test set.
+
+**Source data.** Every trial of every other subject (all sessions), each session
+aligned on its own reference (`alignment.method`, default Riemannian) when the
+condition uses alignment.
+
+**Conditions.**
+
+| Condition | Model trained on | Target treatment |
+|---|---|---|
+| `generic` | unaligned source | unaligned, no calibration (a flat line) |
+| `aligned` | aligned source | aligned with a reference from its calibration epochs (signals only, labels unused) |
+| `aligned+tuned` | aligned source + the `n` calibration trials, weighted `target_weight` (default 10) | same alignment; at `n = 0` identical to `aligned` |
+| `scratch` | the `n` calibration trials only (`n` >= 5 per class), unaligned | unaligned |
+
+Weights: `ts-lr` and `mdm` receive them directly (`sample_weight` of the tangent
+space, scaler and logistic regression; weighted class means in MDM). `csp-lda`
+(its LDA takes no weights) and deep models repeat each calibration trial
+`round(target_weight)` times instead; `fit_weighted()` picks the way from the
+final estimator. Deep models (`eegnet`) are not part of the first configuration
+but plug in through the same model factories.
+
+**Cold start (n = 0).** The aligned conditions have no calibration trials to build
+a reference from, so they use the **first 20 trials of the session, without
+their labels** (`unlabeled_start`). This start is *transductive*: the reference
+covariance is computed on signals of the session that is then tested, though
+never on its labels; online it corresponds to the first minute of use. These 20
+trials are excluded from the test set of every condition, so all conditions are
+scored on the same trials.
+
+**Metrics.** Accuracy, Cohen's kappa and the number of test trials per
+(dataset, model, condition, n, subject, session). The summaries average sessions
+within each subject first, then give the mean and standard deviation over
+subjects (and the number of subjects, which can fall for large `n` when sessions
+are short, as in PhysionetMI).
+
+**Running.**
+
+```bash
+uv sync --extra research
+caffeinate -i -m -s uv run python research/experiments/calibration_curve.py \
+    --config research/configs/calibration-curve.yaml     # [--only NAME] [--no-tracking] [--fresh]
+```
+
+Epochs are cached like in the benchmark; each finished target subject is
+checkpointed in `$OPENMIND_DATA_DIR/cache/calibration-curve/`, so an interrupted
+run resumes where it stopped (`--fresh` ignores the checkpoints, which are also
+disabled while `src/` has uncommitted changes). Every score is written to
+`$OPENMIND_DATA_DIR/results/calibration-curve.csv` and logged to MLflow, one
+nested run per model, with the curves as `accuracy.<condition>` metrics whose
+step is `n`.
+
 ## Results (baselines)
 
 Full tables: [`research/results/baselines.md`](../research/results/baselines.md).
