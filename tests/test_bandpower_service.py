@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 import threading
 import time
@@ -123,13 +124,17 @@ def test_format_frame() -> None:
 # --- command line ---------------------------------------------------------------
 
 runner = CliRunner()
+# Rich colours the help when the CI forces colours (FORCE_COLOR): the escape
+# codes split the option names, so they are removed before searching.
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def test_cli_help() -> None:
     result = runner.invoke(app, ["bandpower", "--help"])
     assert result.exit_code == 0
+    output = _ANSI.sub("", result.output)
     for option in ("--broker", "--user", "--rate", "--baseline-s", "--expected", "--dry-run"):
-        assert option in result.output
+        assert option in output
 
 
 def test_cli_missing_plug(monkeypatch: pytest.MonkeyPatch) -> None:
