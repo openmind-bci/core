@@ -1,0 +1,57 @@
+# Calibration curve of fine-tuned EEGNet (CORE-060): the same protocol as
+# calibration-curve.yaml, with a deep model pre-trained on the aligned source
+# subjects and fine-tuned on the n calibration trials of the new user.
+#
+#   uv sync --extra research --extra deep
+#   caffeinate -i -m -s uv run python research/experiments/calibration_curve.py --config research/configs/calibration-curve-deep.yaml
+#
+# For every target subject: EEGNet is pre-trained once per seed on the aligned
+# trials of the other subjects (this is the n = 0 point of `aligned`), then
+# fine-tuned on the first n trials per class under each strategy (head: output
+# layer; final: last block and output layer; adapter: a new 1x1 spatial layer
+# before the frozen network; full: every weight, low learning rate). EEGNet
+# collapses on some initializations (research/results/montage-c.md), so every
+# number is the mean over three seeds, pre-training included.
+# Protocol: docs/evaluation.md, "Fine-tuning strategies".
+
+name: calibration-curve-deep
+title: Calibration curve of fine-tuned EEGNet (montage C)
+task: CORE-060
+output: research/results/calibration-curve-deep.md
+
+seed: 42
+seeds: [0, 1, 2]
+min_epochs_per_class: 10
+models: [eegnet]
+# Pre-training settings: those of deep.yaml.
+model_params:
+  eegnet: {max_epochs: 300, patience: 60, lr: 0.001, batch_size: 32, device: auto}
+conditions:
+  - aligned
+  - aligned+finetune-head
+  - aligned+finetune-final
+  - aligned+finetune-adapter
+  - aligned+finetune-full
+n_per_class: [0, 5, 10, 20, 40]
+alignment: {method: riemann}
+min_test_per_class: 10
+unlabeled_start: 20
+
+# Fine-tuning: at most `epochs` passes over the calibration trials. With at least
+# 30 trials (10 per class for three classes) 20 % are held out and training stops
+# after `patience` epochs without improvement; with fewer there is no validation
+# set and training runs for exactly `epochs`. Learning rates are per strategy and
+# were not tuned on the test subjects.
+finetune:
+  epochs: 100
+  patience: 20
+  valid_fraction: 0.2
+  min_validation_trials: 30
+  lr: {head: 0.002, final: 0.001, adapter: 0.002, full: 0.0003}
+
+experiments:
+  - name: bnci2014_001-3class-c
+    dataset: bnci2014_001
+    subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    classes: [left, right, forward]
+    channels: [FC3, FC4, C3, Cz, C4, CP3, CP4, CPz]

@@ -36,6 +36,8 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.model_selection import train_test_split
 from torch import nn
 
+from openmind_core.calibration.finetune import DEFAULT_LR, STRATEGIES
+
 logger = logging.getLogger(__name__)
 
 #: Supported architectures.
@@ -68,6 +70,51 @@ def build_network(
     else:
         raise KeyError(f"unknown architecture {architecture!r}; available: {list(ARCHITECTURES)}")
     return network
+
+
+#: Modules (children of the network) that each strategy trains, by architecture.
+#: ``None`` stands for every module; the ``adapter`` strategy trains none of them.
+_TRAINABLE: Final[dict[str, dict[str, tuple[str, ...] | None]]] = {
+    "eegnet": {
+        "head": ("final_layer",),
+        "final": ("conv_separable_depth", "conv_separable_point", "bnorm_2", "final_layer"),
+        "adapter": (),
+        "full": None,
+    },
+    "shallow": {
+        "head": ("final_layer",),
+        "final": ("bnorm", "final_layer"),
+        "adapter": (),
+        "full": None,
+    },
+}
+
+
+class ChannelAdapter(nn.Module):
+    """A per-user 1x1 spatial layer: ``x + delta @ x``, mixing the channels.
+
+    ``delta`` starts at zero, so the adapter is the identity before fine-tuning
+    and weight decay pulls it back towards the identity.
+    """
+
+    def __init__(self, n_chans: int) -> None:
+        super().__init__()
+        self.delta = nn.Parameter(torch.zeros(n_chans, n_chans))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + torch.einsum("cd,bdt->bct", self.delta, x)
+
+
+class _Adapted(nn.Module):
+    """A network preceded by an adapter (the parameters are shared, not copied)."""
+
+    def __init__(self, adapter: nn.Module, network: nn.Module) -> None:
+        super().__init__()
+        self.adapter = adapter
+        self.network = network
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.network(self.adapter(x))  # type: ignore[no-any-return]
 
 
 def resolve_device(device: str) -> torch.device:
@@ -108,6 +155,8 @@ class DeepClassifier(ClassifierMixin, BaseEstimator):  # type: ignore[misc]
         n_times_: Samples per training epoch.
         module_: The trained network (on the CPU).
         history_: Per-epoch ``train_loss``, ``valid_loss`` and ``valid_accuracy``.
+        adapter_: The per-user input layer added by ``fine_tune("adapter")``
+            (absent otherwise).
     """
 
     def __init__(
@@ -162,7 +211,101 @@ class DeepClassifier(ClassifierMixin, BaseEstimator):  # type: ignore[misc]
         """Most probable class of each epoch."""
         return np.asarray(self.classes_[self.predict_proba(X).argmax(axis=1)])
 
+    def fine_tune(
+        self,
+        X: npt.ArrayLike,
+        y: npt.ArrayLike,
+        strategy: str = "head",
+        epochs: int = 100,
+        lr: float | None = None,
+        sample_weight: npt.ArrayLike | None = None,
+        patience: int = 20,
+        valid_fraction: float = 0.2,
+        min_validation_trials: int = 30,
+    ) -> DeepClassifier:
+        """Adapt this (pre-trained) model to a few trials of a new user.
+
+        The model itself is left untouched: a fine-tuned **copy** is returned.
+        Frozen layers keep their weights and their batch-norm statistics.
+
+        Args:
+            X: Calibration epochs ``(n, n_channels, n_times)``, in the same
+                space as the pre-training data (same alignment).
+            y: Their labels, among ``classes_``.
+            strategy: ``"head"`` (output layer), ``"final"`` (last block and
+                output layer), ``"adapter"`` (a new 1x1 spatial layer before the
+                frozen network) or ``"full"`` (every weight).
+            epochs: Maximum number of passes over the trials.
+            lr: Learning rate (default: the strategy's, see
+                :data:`openmind_core.calibration.finetune.DEFAULT_LR`).
+            sample_weight: Optional weight of each trial in the loss.
+            patience: Epochs without validation improvement before stopping.
+            valid_fraction: Share of the trials held out for early stopping.
+            min_validation_trials: With fewer trials nothing is held out and
+                training runs for ``epochs`` (the best epoch cannot be told
+                from so little data).
+
+        Returns:
+            A new classifier. With no trials (``n = 0``) it is an unchanged copy.
+
+        Raises:
+            ValueError: For an unknown strategy, a model that is not trained or
+                labels outside ``classes_``.
+        """
+        if strategy not in STRATEGIES:
+            raise ValueError(f"unknown strategy {strategy!r}; available: {list(STRATEGIES)}")
+        if not hasattr(self, "module_"):
+            raise ValueError("the model is not trained")
+        tuned = copy.deepcopy(self)
+        data = _as_epochs(X)
+        if len(data) == 0:
+            return tuned
+        labels = np.asarray(y)
+        if not np.isin(labels, self.classes_).all():
+            raise ValueError("calibration labels must be among the classes of the model")
+        weights = None if sample_weight is None else np.asarray(sample_weight, dtype=np.float32)
+        if weights is not None and len(weights) != len(data):
+            raise ValueError("sample_weight must have one value per epoch")
+        torch.manual_seed(self.seed)
+        n_chans = data.shape[1]
+        if strategy == "adapter" and getattr(tuned, "adapter_", None) is None:
+            tuned.adapter_ = ChannelAdapter(n_chans)
+        target = np.searchsorted(self.classes_, labels)
+        trainable = _TRAINABLE[self.architecture][strategy]
+        runner = tuned._runner()
+        prefix = "network." if isinstance(runner, _Adapted) else ""
+        if strategy == "adapter":
+            names: tuple[str, ...] | None = ("adapter",)
+        elif trainable is None:
+            names = None
+        else:
+            names = tuple(f"{prefix}{name}" for name in trainable)
+        for name, parameter in runner.named_parameters():
+            parameter.requires_grad = names is None or any(
+                name == p or name.startswith(p + ".") for p in names
+            )
+        use_valid = len(data) >= min_validation_trials and valid_fraction > 0
+        tuned._optimize(
+            runner,
+            tuned._normalize(data),
+            target,
+            max_epochs=epochs,
+            lr=DEFAULT_LR[strategy] if lr is None else lr,
+            patience=patience,
+            valid_fraction=valid_fraction if use_valid else 0.0,
+            sample_weight=weights,
+            train_modules=names,
+        )
+        for parameter in runner.parameters():
+            parameter.requires_grad = True
+        return tuned
+
     # -- internals -----------------------------------------------------------
+
+    def _runner(self) -> nn.Module:
+        """The module that maps normalized epochs to logits (adapter included)."""
+        adapter = getattr(self, "adapter_", None)
+        return self.module_ if adapter is None else _Adapted(adapter, self.module_)
 
     def _normalize(self, data: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
         if data.shape[1] != len(self.scale_):
@@ -171,38 +314,70 @@ class DeepClassifier(ClassifierMixin, BaseEstimator):  # type: ignore[misc]
 
     @torch.no_grad()
     def _logits(self, data: npt.NDArray[np.float32]) -> torch.Tensor:
-        self.module_.eval()
-        outputs = [
-            self.module_(torch.from_numpy(data[i : i + 256])) for i in range(0, len(data), 256)
-        ]
+        runner = self._runner().eval()
+        outputs = [runner(torch.from_numpy(data[i : i + 256])) for i in range(0, len(data), 256)]
         return torch.cat(outputs) if outputs else torch.empty(0, len(self.classes_))
 
     def _train(self, data: npt.NDArray[np.float32], target: npt.NDArray[np.int64]) -> None:
+        self._optimize(
+            self.module_,
+            data,
+            target,
+            max_epochs=self.max_epochs,
+            lr=self.lr,
+            patience=self.patience,
+            valid_fraction=self.valid_fraction,
+        )
+
+    def _optimize(
+        self,
+        module: nn.Module,
+        data: npt.NDArray[np.float32],
+        target: npt.NDArray[np.int64],
+        max_epochs: int,
+        lr: float,
+        patience: int,
+        valid_fraction: float,
+        sample_weight: npt.NDArray[np.float32] | None = None,
+        train_modules: tuple[str, ...] | None = None,
+    ) -> None:
+        """Train the parameters of ``module`` that require a gradient.
+
+        Args:
+            train_modules: Names (prefixes) of the submodules left in training
+                mode; every other one stays in evaluation mode, so that frozen
+                batch-norm layers keep their statistics. ``None`` trains all.
+        """
         device = resolve_device(self.device)
         rng = np.random.default_rng(self.seed)
         train_idx = np.arange(len(data))
         valid_idx = np.array([], dtype=np.int64)
         counts = np.bincount(target)
-        if self.valid_fraction > 0 and int(np.min(counts)) >= 2:
+        if valid_fraction > 0 and int(np.min(counts)) >= 2:
             train_idx, valid_idx = train_test_split(
-                train_idx, test_size=self.valid_fraction, stratify=target, random_state=self.seed
+                train_idx, test_size=valid_fraction, stratify=target, random_state=self.seed
             )
         x_train = torch.from_numpy(data[train_idx]).to(device)
         y_train = torch.from_numpy(target[train_idx]).to(device)
         x_valid = torch.from_numpy(data[valid_idx]).to(device)
         y_valid = torch.from_numpy(target[valid_idx]).to(device)
-
-        module = self.module_.to(device)
-        optimizer = torch.optim.AdamW(
-            module.parameters(), lr=self.lr, weight_decay=self.weight_decay
+        w_train = (
+            None
+            if sample_weight is None
+            else torch.from_numpy(np.asarray(sample_weight, dtype=np.float32)[train_idx]).to(device)
         )
-        schedule = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.max_epochs)
+
+        module = module.to(device)
+        parameters = [p for p in module.parameters() if p.requires_grad]
+        optimizer = torch.optim.AdamW(parameters, lr=lr, weight_decay=self.weight_decay)
+        schedule = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_epochs)
         loss_fn = nn.CrossEntropyLoss()
+        weighted_loss_fn = nn.CrossEntropyLoss(reduction="none")
         best_loss, best_state, since_best = np.inf, copy.deepcopy(module.state_dict()), 0
         self.history_: list[dict[str, float]] = []
 
-        for epoch in range(self.max_epochs):
-            module.train()
+        for epoch in range(max_epochs):
+            _set_training(module, train_modules)
             order = rng.permutation(len(x_train))
             total = 0.0
             for start in range(0, len(order), self.batch_size):
@@ -210,7 +385,12 @@ class DeepClassifier(ClassifierMixin, BaseEstimator):  # type: ignore[misc]
                 if len(batch) < 2:  # batch norm needs two samples
                     continue
                 optimizer.zero_grad()
-                loss = loss_fn(module(x_train[batch]), y_train[batch])
+                if w_train is None:
+                    loss = loss_fn(module(x_train[batch]), y_train[batch])
+                else:
+                    weight = w_train[batch]
+                    per_trial = weighted_loss_fn(module(x_train[batch]), y_train[batch])
+                    loss = (per_trial * weight).sum() / weight.sum()
                 loss.backward()
                 optimizer.step()
                 total += float(loss.detach()) * len(batch)
@@ -232,13 +412,24 @@ class DeepClassifier(ClassifierMixin, BaseEstimator):  # type: ignore[misc]
                 else:
                     since_best += 1
             self.history_.append(record)
-            if len(valid_idx) and since_best >= self.patience:
+            if len(valid_idx) and since_best >= patience:
                 logger.debug("early stop at epoch %d", epoch)
                 break
 
         if len(valid_idx):
             module.load_state_dict(best_state)
-        self.module_ = module.to("cpu").eval()
+        module.to("cpu").eval()
+
+
+def _set_training(module: nn.Module, names: tuple[str, ...] | None) -> None:
+    """Training mode for the submodules under ``names`` (all if ``None``), evaluation otherwise."""
+    if names is None:
+        module.train()
+        return
+    module.eval()
+    for name, child in module.named_modules():
+        if any(name == p or name.startswith(p + ".") for p in names):
+            child.train()
 
 
 def _as_epochs(X: npt.ArrayLike) -> npt.NDArray[np.float32]:

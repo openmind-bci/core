@@ -5,9 +5,11 @@
         --config research/configs/calibration-curve.yaml [--only NAME ...] [--no-tracking] [--fresh]
 
 For every experiment of the configuration and every target subject (leave one
-subject out), evaluates each model under four conditions (generic, aligned,
-aligned + tuned, from scratch) for an increasing number of calibration trials
-per class. The protocol is documented in ``docs/evaluation.md`` ("Calibration
+subject out), evaluates each model under several conditions (generic, aligned,
+aligned + tuned, from scratch, and optionally aligned + fine-tuned with a
+strategy, or a similarity-based cold start) for an increasing number of
+calibration trials per class. With ``seeds``, deep models are repeated per seed
+and averaged. The protocol is documented in ``docs/evaluation.md`` ("Calibration
 curve") and implemented in ``openmind_core.calibration``.
 
 Outputs: the Markdown tables of the configuration's ``output`` file, a CSV of
@@ -50,13 +52,16 @@ from benchmark import (  # a sibling script, not a package
 
 from openmind_core.alignment import align_epochs
 from openmind_core.calibration import (
-    ALIGNED,
+    ALL_CONDITIONS,
     CONDITIONS,
+    DEFAULT_COLDSTART_K,
     DEFAULT_N_PER_CLASS,
-    TUNED,
+    GENERIC,
+    SCRATCH,
     CurveScore,
     CurveSummary,
     calibration_curve,
+    condition_rank,
     summarize_curve,
 )
 from openmind_core.datasets import DATASETS
@@ -77,6 +82,10 @@ SETTINGS = (
     "min_test_per_class",
     "unlabeled_start",
 )
+
+#: Settings that only enter the checkpoint key when the configuration sets them,
+#: so that adding them did not invalidate the checkpoints of older configurations.
+OPTIONAL_SETTINGS = ("seeds", "finetune", "coldstart_k")
 
 
 @dataclass
@@ -139,15 +148,20 @@ def run_experiment(
     experiment = experiment | {"dropped": dropped}
     alignment = config.get("alignment") or {"method": "riemann"}
     conditions = config.get("conditions") or list(CONDITIONS)
+    unknown = sorted(set(conditions) - set(ALL_CONDITIONS))
+    if unknown:
+        raise ValueError(f"unknown conditions {unknown}; available: {list(ALL_CONDITIONS)}")
     aligned = (
         align_epochs(epochs, method=alignment.get("method", "riemann"), by="session")
-        if {ALIGNED, TUNED} & set(conditions)
+        if set(conditions) - {GENERIC, SCRATCH}
         else None
     )
     models = {name: factory(config, name, epochs.srate) for name in config["models"]}
     scores: list[CurveScore] = []
     elapsed = 0.0
-    subjects = list(epochs.subjects)
+    # `targets` limits the evaluated subjects (smoke runs); the source is always every other one.
+    targets = experiment.get("targets")
+    subjects = [s for s in epochs.subjects if not targets or int(s) in targets]
     for i, subject in enumerate(subjects, start=1):
         checkpoint = checkpoint_path(config, experiment, code, subject)
         if checkpoint is not None and checkpoint.exists() and not fresh:
@@ -175,6 +189,9 @@ def run_experiment(
                 aligned_epochs=aligned,
                 min_test_per_class=config.get("min_test_per_class", 10),
                 unlabeled_start=config.get("unlabeled_start", 20),
+                seeds=config.get("seeds"),
+                finetune=config.get("finetune"),
+                coldstart_k=config.get("coldstart_k", DEFAULT_COLDSTART_K),
             )
             took = time.perf_counter() - start
             if checkpoint is not None:
@@ -226,10 +243,12 @@ def checkpoint_path(
     """
     if code["src_tree"] == "dirty":
         return None
+    settings = {k: config.get(k) for k in SETTINGS}
+    settings |= {k: config[k] for k in OPTIONAL_SETTINGS if k in config}
     key = json.dumps(
         {
             "experiment": experiment,
-            "settings": {k: config.get(k) for k in SETTINGS},
+            "settings": settings,
             "src": code["src_tree"],
         },
         sort_keys=True,
@@ -291,6 +310,9 @@ def track(
         "alignment": json.dumps(config.get("alignment") or {"method": "riemann"}),
         "min_test_per_class": config.get("min_test_per_class", 10),
         "unlabeled_start": config.get("unlabeled_start", 20),
+        "seeds": ",".join(map(str, config.get("seeds") or [])) or "none",
+        "finetune": json.dumps(config.get("finetune") or {}),
+        "coldstart_k": config.get("coldstart_k", DEFAULT_COLDSTART_K),
         "dropped_subjects": ",".join(map(str, experiment["dropped"])) or "none",
     }
     with mlflow.start_run(run_name=experiment["name"], tags=tags):
@@ -381,6 +403,18 @@ def write_report(
         f"- Weight of the calibration trials in `aligned+tuned`: "
         f"{config.get('target_weight', 10.0)}",
     ]
+    if config.get("seeds"):
+        lines.append(
+            f"- Deep models repeated over seeds {', '.join(map(str, config['seeds']))} "
+            "(source pre-training included) and averaged"
+        )
+    if config.get("finetune"):
+        lines.append(f"- Fine-tuning: {json.dumps(config['finetune'])}")
+    if any(c.startswith("coldstart") for c in config.get("conditions") or []):
+        lines.append(
+            f"- `coldstart-knn`: {config.get('coldstart_k', DEFAULT_COLDSTART_K)} nearest source "
+            "subjects (Riemannian distance between unlabeled-start covariances), n = 0 only"
+        )
     for model, params in (config.get("model_params") or {}).items():
         settings = ", ".join(f"{key}={value}" for key, value in params.items())
         lines.append(f"- `{model}`: {settings}")
@@ -397,7 +431,7 @@ def model_tables(model: str, result: Result) -> list[str]:
     if not summaries:
         return []
     ns = sorted({s.n for s in summaries})
-    conditions = [c for c in CONDITIONS if any(s.condition == c for s in summaries)]
+    conditions = sorted({s.condition for s in summaries}, key=condition_rank)
     by_key = {(s.condition, s.n): s for s in summaries}
     header = ["| Condition | " + " | ".join(f"{n}" for n in ns) + " |", "|---|" + "---|" * len(ns)]
     main_rows, own_rows = [], []
