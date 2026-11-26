@@ -62,4 +62,7 @@ message = tracker.to_message("P03")           # openmind_protocol.Score
 store.append_score("P03", tracker.to_record("P03"))
 ```
 
-The tracker is not wired into the online loop yet.
+The tracker is not wired into the online loop yet: `openmind-core online` does
+not publish `score` messages. Publishing a score at the end of each block when
+calibration markers arrive is planned
+([#9](https://github.com/openmind-bci/core/issues/9)).

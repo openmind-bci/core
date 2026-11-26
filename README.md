@@ -89,7 +89,9 @@ Protocols and discussion: [docs/evaluation.md](docs/evaluation.md).
 
 ## Status
 
-Pre-alpha. The offline pipeline is in place; the real-time loop is next.
+Pre-alpha. The offline pipeline and the real-time loop are in place; the guided
+calibration, the online adaptation and the progress score exist as libraries
+and are not exposed by `openmind-core online` yet.
 See [CHANGELOG.md](CHANGELOG.md).
 
 | Component | Status |
@@ -100,9 +102,12 @@ See [CHANGELOG.md](CHANGELOG.md).
 | Session alignment (`openmind_core.alignment`) | available |
 | Double jaw clench detector (`JawClenchDetector`) | available |
 | Calibration trials rebuilt from Plug / Sandbox markers (`TrialCollector`) | available |
-| Fast calibration (fine-tuning, cold start by similarity) | planned |
-| User profiles (`openmind-core profile`) | planned |
-| Real-time loop: LSL in, MQTT commands and heartbeat out (`openmind-core online`) | planned |
+| Fast calibration, offline evaluation (alignment, fine-tuning, cold start by similarity; [`research/REPORT.md`](research/REPORT.md)) | available |
+| User profiles (`openmind-core profile`) | available |
+| Real-time loop: LSL in, MQTT commands and heartbeat out (`openmind-core online`) | available |
+| Guided calibration session (`CalibrationRecorder`, `PersonalModel`) | library; CLI planned ([#10](https://github.com/openmind-bci/core/issues/10)) |
+| Online adaptation with rollback (`openmind_core.online.adaptation`) | library; CLI planned ([#10](https://github.com/openmind-bci/core/issues/10)) |
+| Progress score (`ProgressTracker`, `openmind/v1/score`) | library; not published by `online` yet ([#9](https://github.com/openmind-bci/core/issues/9)) |
 | Band power for the 3D brain (`openmind/v1/bandpower`) | available (`openmind-core bandpower`) |
 
 ## Installation
