@@ -11,6 +11,9 @@ are listed under their own heading.
 
 ### Fixed
 
+- Text files (model cards, research results, checkpoints and configs) are read
+  and written in UTF-8 instead of the platform encoding: on Windows, writing the
+  results failed on non-ASCII characters such as `κ`.
 - The `deep` and `foundation` extras install the CPU build of `torchaudio` on
   Linux and Windows, like `torch`: the PyPI wheel pulled by braindecode needs
   the CUDA runtime and failed to import on machines without it.

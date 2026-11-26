@@ -261,12 +261,15 @@ def test_research_script_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         "seed: 1\nmin_epochs_per_class: 5\nmodels: [mdm]\n"
         "n_per_class: [0, 5]\nmin_test_per_class: 3\nunlabeled_start: 6\n"
         "experiments:\n  - name: synthetic\n    dataset: bnci2014_001\n"
-        "    subjects: [1, 2, 3]\n    classes: [left, right, forward]\n"
+        "    subjects: [1, 2, 3]\n    classes: [left, right, forward]\n",
+        encoding="utf-8",
     )
     module.main(["--config", str(config), "--no-tracking"])
-    report = output.read_text()
+    report = output.read_text(encoding="utf-8")
     assert "### `mdm`" in report
     assert "`aligned+tuned`" in report
     csv_file = tmp_path / "data" / "results" / "smoke.csv"
-    assert csv_file.read_text().splitlines()[0].startswith("experiment,dataset,model")
-    assert len(csv_file.read_text().splitlines()) > 10
+    assert (
+        csv_file.read_text(encoding="utf-8").splitlines()[0].startswith("experiment,dataset,model")
+    )
+    assert len(csv_file.read_text(encoding="utf-8").splitlines()) > 10

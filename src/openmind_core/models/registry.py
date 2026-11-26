@@ -187,7 +187,7 @@ def save_model(
         import joblib
 
         joblib.dump(model, target / SKLEARN_MODEL)
-    (target / CARD).write_text(json.dumps(asdict(card), indent=2) + "\n")
+    (target / CARD).write_text(json.dumps(asdict(card), indent=2) + "\n", encoding="utf-8")
     return target
 
 
@@ -200,7 +200,7 @@ def load_card(name: str, root: Path | None = None) -> ModelCard:
     path = (root or models_dir()) / name / CARD
     if not path.exists():
         raise FileNotFoundError(f"no model {name!r} in {path.parent.parent}")
-    raw = json.loads(path.read_text())
+    raw = json.loads(path.read_text(encoding="utf-8"))
     for key in ("channels", "classes", "scale"):
         raw[key] = tuple(raw[key])
     return ModelCard(**raw)
