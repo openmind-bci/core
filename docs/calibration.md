@@ -3,8 +3,10 @@
 A calibration session turns the cued trials of a Sandbox scene into labelled
 epochs, adapts the decoder to the user as they come in, and tells how much the
 decoder still relies on the generic model. The code lives in
-`openmind_core.calibration`. It is pure logic driven by EEG blocks and markers;
-it is not wired to the command line yet.
+`openmind_core.calibration`. It is pure logic driven by EEG blocks and markers.
+`openmind-core online` does not run a calibration session yet: it decodes with
+a registered model after the warm-up (a `--calibrate` option is planned,
+[#10](https://github.com/openmind-bci/core/issues/10)).
 
 ## Session flow
 
@@ -114,7 +116,8 @@ data and stays out of the repositories).
 
 EEG drifts during a session (electrode impedance, fatigue, posture).
 `openmind_core.online.adaptation` follows it with three bounded, reversible
-mechanisms. It is a library for now: it is not wired into the command line.
+mechanisms. It is a library for now: `openmind-core online` does not use it yet
+(an `--adapt` option is planned, [#10](https://github.com/openmind-bci/core/issues/10)).
 
 ```python
 adapter = RecenteringAdapter(half_life_s=120)   # or rate=0.01
