@@ -112,7 +112,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 
-    config = yaml.safe_load(args.config.read_text())
+    config = yaml.safe_load(args.config.read_text(encoding="utf-8"))
     config["config_path"] = display_path(args.config.resolve())
     experiments = [e for e in config["experiments"] if not args.only or e["name"] in set(args.only)]
     code = code_version()
@@ -165,7 +165,7 @@ def run_experiment(
     for i, subject in enumerate(subjects, start=1):
         checkpoint = checkpoint_path(config, experiment, code, subject)
         if checkpoint is not None and checkpoint.exists() and not fresh:
-            saved = json.loads(checkpoint.read_text())
+            saved = json.loads(checkpoint.read_text(encoding="utf-8"))
             subject_scores = [CurveScore(**s) for s in saved["scores"]]
             took = float(saved["elapsed"])
             logger.info(
@@ -197,7 +197,8 @@ def run_experiment(
             if checkpoint is not None:
                 checkpoint.parent.mkdir(parents=True, exist_ok=True)
                 checkpoint.write_text(
-                    json.dumps({"elapsed": took, "scores": [asdict(s) for s in subject_scores]})
+                    json.dumps({"elapsed": took, "scores": [asdict(s) for s in subject_scores]}),
+                    encoding="utf-8",
                 )
             logger.info(
                 "%s subject %s (%d/%d): %d scores in %.0f s",
@@ -264,7 +265,7 @@ def write_csv(config: dict[str, Any], results: list[Result], partial: bool) -> P
     path = data_dir(create=True) / "results" / f"{config['name']}{suffix}.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
     fields = ["experiment", *CurveScore.__dataclass_fields__]
-    with path.open("w", newline="") as handle:
+    with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         for result in results:
@@ -319,7 +320,7 @@ def track(
         mlflow.log_params(params)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "scores.csv"
-            with path.open("w", newline="") as handle:
+            with path.open("w", newline="", encoding="utf-8") as handle:
                 writer = csv.DictWriter(handle, fieldnames=list(CurveScore.__dataclass_fields__))
                 writer.writeheader()
                 writer.writerows(asdict(score) for score in result.scores)
@@ -423,7 +424,7 @@ def write_report(
         "",
     ]
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text("\n".join(lines))
+    output.write_text("\n".join(lines), encoding="utf-8")
 
 
 def model_tables(model: str, result: Result) -> list[str]:

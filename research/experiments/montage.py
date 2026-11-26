@@ -446,7 +446,7 @@ def read_sections() -> dict[str, str]:
     """Sections of the previous report, to keep the parts that are not rerun."""
     if not RESULTS.exists():
         return {}
-    text = RESULTS.read_text()
+    text = RESULTS.read_text(encoding="utf-8")
     sections = {}
     for key, title in (("channels", "## Part A"), ("blinks", "## Part B")):
         match = re.search(rf"^{re.escape(title)}.*?(?=^## |\Z)", text, re.S | re.M)
@@ -474,7 +474,7 @@ def write_report(sections: dict[str, str], code: dict[str, str], versions: dict[
         "",
     ]
     RESULTS.parent.mkdir(parents=True, exist_ok=True)
-    RESULTS.write_text("\n".join(lines))
+    RESULTS.write_text("\n".join(lines), encoding="utf-8")
 
 
 def track(part: str, metrics: dict[str, float], code: dict[str, str]) -> None:

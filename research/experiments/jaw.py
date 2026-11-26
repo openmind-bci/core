@@ -408,7 +408,7 @@ def report(runs: list[Run], run_index: int, elapsed: float) -> None:
     ]
     output = RESULTS_DIR / ("jaw.md" if run_index == 1 else f"jaw-run{run_index}.md")
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text("\n".join(lines))
+    output.write_text("\n".join(lines), encoding="utf-8")
     logger.info("results written to %s", output.relative_to(ROOT))
 
 

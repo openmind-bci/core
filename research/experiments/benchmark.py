@@ -86,7 +86,7 @@ def main() -> None:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 
-    config = yaml.safe_load(args.config.read_text())
+    config = yaml.safe_load(args.config.read_text(encoding="utf-8"))
     config["config_path"] = args.config.resolve().relative_to(ROOT).as_posix()
     experiments = [e for e in config["experiments"] if not args.only or e["name"] in set(args.only)]
     code = code_version()
@@ -191,11 +191,11 @@ def checkpoint_path(
 
 def save_result(path: Path, result: Result) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(asdict(result), indent=1))
+    path.write_text(json.dumps(asdict(result), indent=1), encoding="utf-8")
 
 
 def load_result(path: Path) -> Result:
-    raw = json.loads(path.read_text())
+    raw = json.loads(path.read_text(encoding="utf-8"))
     raw["channels"] = tuple(raw["channels"])
     raw["summaries"] = [Summary(**summary) for summary in raw["summaries"]]
     return Result(**raw)
@@ -283,7 +283,12 @@ def code_version() -> dict[str, str]:
     def git(*command: str) -> str:
         try:
             return subprocess.run(
-                ["git", *command], cwd=ROOT, capture_output=True, text=True, check=True
+                ["git", *command],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=True,
             ).stdout.strip()
         except (OSError, subprocess.CalledProcessError):
             return ""
@@ -339,7 +344,7 @@ def track(
         mlflow.log_params(data_params | {"exported_models": ",".join(result.exported) or "none"})
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "scores.csv"
-            with path.open("w", newline="") as handle:
+            with path.open("w", newline="", encoding="utf-8") as handle:
                 writer = csv.DictWriter(handle, fieldnames=list(Score.__dataclass_fields__))
                 writer.writeheader()
                 writer.writerows(asdict(score) for score in scores)
@@ -447,7 +452,7 @@ def write_report(
         "",
     ]
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text("\n".join(lines))
+    output.write_text("\n".join(lines), encoding="utf-8")
 
 
 def describe_alignment(experiment: dict[str, Any]) -> str:

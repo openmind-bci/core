@@ -50,7 +50,7 @@ def test_every_kind_has_examples() -> None:
 @pytest.mark.parametrize("path", VALID, ids=lambda p: p.stem)
 def test_valid_examples_pass_schema_and_models(path: Path) -> None:
     kind = kind_of_example(path)
-    document = json.loads(path.read_text())
+    document = json.loads(path.read_text(encoding="utf-8"))
     assert schema_errors(kind, document) == []  # type: ignore[arg-type]
     message = decode(path.read_bytes(), kind)  # type: ignore[arg-type]
     assert isinstance(message, MODELS[kind])  # type: ignore[index]
@@ -70,7 +70,9 @@ def test_invalid_examples_fail(path: Path) -> None:
     assert error.value.problems
     assert error.value.kind == kind
     try:
-        document = json.loads(path.read_text(), parse_constant=lambda _: float("nan"))
+        document = json.loads(
+            path.read_text(encoding="utf-8"), parse_constant=lambda _: float("nan")
+        )
     except json.JSONDecodeError:
         return  # not JSON at all
     if not any(token in path.stem for token in ("nan",)):

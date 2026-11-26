@@ -148,7 +148,7 @@ def test_scores(store: ProfileStore) -> None:
     assert [s["score"] for s in scores] == [10, 20]
     assert scores[0]["ts"] == 1.0
     assert "ts" in scores[1]
-    lines = (store.root / "P01" / "scores.jsonl").read_text().splitlines()
+    lines = (store.root / "P01" / "scores.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(lines) == 2
 
 
@@ -165,7 +165,10 @@ def test_atomic_write_leaves_no_tmp(store: ProfileStore) -> None:
     store.save_reference("P01", _spd(), CHANNELS)
     names = sorted(p.name for p in (store.root / "P01").iterdir())
     assert names == ["profile.json", "reference.npz"]
-    assert json.loads((store.root / "P01" / "profile.json").read_text())["model"] == "m"
+    assert (
+        json.loads((store.root / "P01" / "profile.json").read_text(encoding="utf-8"))["model"]
+        == "m"
+    )
 
 
 def test_profiles_dir_uses_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

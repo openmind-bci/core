@@ -95,7 +95,8 @@ def test_old_cards_stay_loadable(tmp_path: Path) -> None:
                 "openmind_core": "0.0.1",
                 "created": "2026-01-01T00:00:00+00:00",
             }
-        )
+        ),
+        encoding="utf-8",
     )
     card = load_card("old", root=tmp_path)
     assert isinstance(card, ModelCard)
@@ -108,7 +109,7 @@ def test_unknown_format_is_refused(tmp_path: Path) -> None:
     card = ModelCard("odd", "x", ("C3",), 250.0, 500, ("a", "b"), (1.0,), format="onnx")
     from dataclasses import asdict
 
-    (folder / "card.json").write_text(json.dumps(asdict(card)))
+    (folder / "card.json").write_text(json.dumps(asdict(card)), encoding="utf-8")
     with pytest.raises(ValueError, match="unknown model format"):
         load_model("odd", root=tmp_path)
 
