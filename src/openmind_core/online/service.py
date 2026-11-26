@@ -14,6 +14,7 @@ arrays on timeout).
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable, Iterable
@@ -34,6 +35,8 @@ from openmind_core.online.emitter import (
 )
 from openmind_core.online.evidence import Decision, EvidenceAccumulator
 from openmind_protocol import Command, Message, Status
+
+logger = logging.getLogger(__name__)
 
 Block = tuple[npt.ArrayLike, npt.ArrayLike]
 
@@ -119,6 +122,7 @@ def run_online(
             text = None
         return status_emitter.make(state, message=text)
 
+    error: BaseException | None = None
     try:
         for samples, timestamps in blocks:
             if stop is not None and stop.is_set():
@@ -147,9 +151,20 @@ def run_online(
             if now - last_latency >= latency_every_s:
                 last_latency = now
                 publish(latency.to_event())
+    except BaseException as exc:
+        error = exc
+        raise
     finally:
-        publish(command_emitter.force(Decision("rest", 1.0)))
-        publish(status_emitter.make("idle", message="stopped"))
+        try:
+            publish(command_emitter.force(Decision("rest", 1.0)))
+            publish(status_emitter.make("idle", message="stopped"))
+        except Exception:
+            if error is None:
+                raise
+            # Raising here would replace the error that ended the loop (e.g. a decoder
+            # failure) with the publish failure (e.g. a lost broker): log it and let the
+            # original error propagate.
+            logger.exception("could not publish the final rest command and idle status")
     return OnlineStats(
         blocks=n_blocks,
         windows=n_windows,

@@ -148,6 +148,55 @@ def test_messages_validate_and_commands_follow_the_model() -> None:
     assert stats.duration_s == pytest.approx(25.0)
 
 
+class DecoderError(RuntimeError):
+    pass
+
+
+class FailingModel:
+    def predict_proba(self, x: npt.NDArray[Any]) -> npt.NDArray[np.float64]:
+        raise DecoderError("decoder broke")
+
+
+def run_with_publish(model: object, publish: Callable[[Message], None]) -> OnlineStats:
+    clock = Clock()
+    decoder = OnlineDecoder(model, make_card(), CHANNELS, FS, OnlineConfig(warmup_s=0.0))
+    return run_online(
+        blocks(5.0, clock),
+        publish,
+        decoder=decoder,
+        accumulator=EvidenceAccumulator(CLASSES),
+        command_emitter=CommandEmitter("P01", clock=clock),
+        status_emitter=StatusEmitter("scripted", "P01", clock=clock),
+        health=HealthMonitor(clock=clock),
+        latency=LatencyMeter(clock=clock),
+        clock=clock,
+    )
+
+
+def test_original_error_survives_a_failing_final_publish(caplog: pytest.LogCaptureFixture) -> None:
+    def publish(message: Message) -> None:
+        # the failing decoder produces no command, so the only one is the final rest
+        if isinstance(message, Command):
+            raise ConnectionError("broker lost")
+
+    with (
+        caplog.at_level("ERROR", logger="openmind_core.online.service"),
+        pytest.raises(DecoderError, match="decoder broke"),
+    ):
+        run_with_publish(FailingModel(), publish)
+    assert "final rest" in caplog.text
+    assert "broker lost" in caplog.text
+
+
+def test_failing_final_publish_is_raised_when_nothing_else_failed() -> None:
+    def publish(message: Message) -> None:
+        if isinstance(message, Status) and message.state == "idle":
+            raise ConnectionError("broker lost")
+
+    with pytest.raises(ConnectionError, match="broker lost"):
+        run_with_publish(Scripted(lambda i: (0.34, 0.33, 0.33)), publish)
+
+
 def test_final_rest_and_idle_even_when_last_command_was_rest() -> None:
     _, sent = run(Scripted(lambda i: (0.34, 0.33, 0.33)), lambda c: blocks(8.0, c))
     assert isinstance(sent[-2], Command) and sent[-2].command == "rest"
