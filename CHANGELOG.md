@@ -14,6 +14,13 @@ are listed under their own heading.
 - The `deep` and `foundation` extras install the CPU build of `torchaudio` on
   Linux and Windows, like `torch`: the PyPI wheel pulled by braindecode needs
   the CUDA runtime and failed to import on machines without it.
+- `run_online` no longer hides the error that ended the loop (a decoder failure, say)
+  when publishing the final `rest` command or `idle` status also fails (a lost
+  broker): the publish failure is logged and the original error is raised.
+- Online warm-up: the alignment reference now ends once the accepted windows cover
+  `warmup_s` seconds of distinct signal. It used to assume the windows were
+  contiguous, which kept the warm-up running longer than needed after rejected
+  windows.
 
 ### Changed
 
@@ -73,12 +80,6 @@ are listed under their own heading.
   Hugging Face Hub at run time, with 250 to 200 Hz resampling and rescaling, the
   `fine_tune()` strategies of the deep models, and
   `research/configs/calibration-curve-foundation.yaml`.
-
-### Fixed
-
-- `run_online` no longer hides the error that ended the loop (a decoder failure, say)
-  when publishing the final `rest` command or `idle` status also fails (a lost
-  broker): the publish failure is logged and the original error is raised.
 
 ### Protocol 1.0.1 (`openmind-protocol`)
 

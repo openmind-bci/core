@@ -218,6 +218,29 @@ def test_warmup_then_running(aligned: tuple) -> None:  # type: ignore[type-arg]
     assert reference.shape == (7, 7)
 
 
+def covered_samples(predictions: list) -> int:  # type: ignore[type-arg]
+    """Distinct samples covered by the windows ending at these predictions."""
+    covered: set[int] = set()
+    for p in predictions:
+        end = round(p.timestamp * FS)
+        covered.update(range(end - N_TIMES + 1, end + 1))
+    return len(covered)
+
+
+def test_warmup_counts_distinct_samples_around_rejected_windows(aligned: tuple) -> None:  # type: ignore[type-arg]
+    data, _ = recording(["left", "right", "forward"] * 3, 6.0, seed=3)
+    t = np.arange(round(1.0 * FS)) / FS
+    data[round(5 * FS) : round(6 * FS), 2] += 1500 * np.sin(2 * np.pi * 10 * t) * np.hanning(len(t))
+    decoder = OnlineDecoder(*aligned, STREAM, FS, OnlineConfig(warmup_s=10.0))
+    predictions, _ = push_in_blocks(decoder, as_stream(data))
+    first_ok = next(i for i, p in enumerate(predictions) if p.ok)
+    assert any(p.reason == "rejected" for p in predictions[:first_ok])
+    used = [p for p in predictions[:first_ok] if p.reason == "warmup"]
+    # The reference rests on at least 10 s of distinct signal, and ends as soon as it does.
+    assert covered_samples([*used, predictions[first_ok]]) >= 10.0 * FS
+    assert covered_samples(used) < 10.0 * FS
+
+
 def test_given_reference_starts_running(aligned: tuple) -> None:  # type: ignore[type-arg]
     reference = Reference(np.eye(7) * 25.0, MONTAGE_A_MI)
     decoder = OnlineDecoder(*aligned, STREAM, FS, reference=reference)
