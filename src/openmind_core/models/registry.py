@@ -248,3 +248,29 @@ def list_models(root: Path | None = None) -> list[ModelCard]:
     if not base.exists():
         return []
     return [load_card(path.parent.name, base) for path in sorted(base.glob(f"*/{CARD}"))]
+
+
+def model_size(name: str, root: Path | None = None) -> int:
+    """Size in bytes of a registered model's files (card and weights)."""
+    validate_name(name)
+    folder = (root or models_dir()) / name
+    return sum(path.stat().st_size for path in folder.rglob("*") if path.is_file())
+
+
+def delete_model(name: str, root: Path | None = None) -> int:
+    """Remove a registered model and return the number of files deleted.
+
+    Raises:
+        ValueError: If ``name`` is not a valid registry name (so a name such as
+            ``../x`` can never reach outside the registry).
+        FileNotFoundError: If the model is not registered.
+    """
+    import shutil
+
+    validate_name(name)
+    folder = (root or models_dir()) / name
+    if not (folder / CARD).exists():
+        raise FileNotFoundError(f"no model {name!r} in {folder.parent}")
+    count = sum(1 for path in folder.rglob("*") if path.is_file())
+    shutil.rmtree(folder)
+    return count

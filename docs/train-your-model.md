@@ -34,6 +34,14 @@ The first run downloads the dataset into `$OPENMIND_DATA_DIR/mne_data/`.
 Training fits on every epoch; to measure the model, run the benchmark
 (`research/experiments/benchmark.py`, see [evaluation.md](evaluation.md)).
 
+Inspect the registry with `models`:
+
+```bash
+uv run openmind-core models list                                # name, architecture, classes, alignment, channels, size
+uv run openmind-core models show ts-lr-bnci2014_001-c-riemann   # the whole card: channels, filters, training data
+uv run openmind-core models delete ts-lr-bnci2014_001-c-riemann # asks first; --yes to skip
+```
+
 ## 3. Run it on a stream
 
 ```bash
