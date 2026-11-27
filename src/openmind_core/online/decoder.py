@@ -253,7 +253,11 @@ class OnlineDecoder:
                 for t in self._jaw.update(segment):
                     local = min(max(round(t * self.srate) - start, 0), n - 1)
                     actions.append(t if times is None else float(times[local]))
-                muscle = self._jaw.active
+                # Reject the window if muscle activity is in progress or touched
+                # any of its samples (a burst can end inside the window).
+                first = start + stop - self._window.n_times
+                last = self._jaw.last_active
+                muscle = self._jaw.active or (last is not None and last >= first)
             for window in self._window.push(self._filter(segment)):
                 end = stop - 1
                 stamp = (start + end) / self.srate if times is None else float(times[end])

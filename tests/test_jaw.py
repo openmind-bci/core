@@ -110,6 +110,18 @@ def test_long_bursts_are_ignored_but_pause_decoding() -> None:
     assert not detector.active
 
 
+def test_last_active_remembers_a_burst_that_has_ended() -> None:
+    x = background(15)
+    add_burst(x, 10.0)
+    detector = JawClenchDetector(FS, N_CHANNELS)
+    detector.update(x[: int(9 * FS)])
+    assert detector.last_active is None
+    detector.update(x[int(9 * FS) :])
+    assert not detector.active
+    assert detector.last_active is not None
+    assert 10.2 * FS < detector.last_active < 11.0 * FS
+
+
 def test_one_electrode_cannot_trigger() -> None:
     x = background(20)
     add_double(x, 10.0, amplitude=4 * STRONG_UV, channels=[2])  # a bad contact on C3

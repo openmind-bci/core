@@ -24,6 +24,10 @@ are listed under their own heading.
   `warmup_s` seconds of distinct signal. It used to assume the windows were
   contiguous, which kept the warm-up running longer than needed after rejected
   windows.
+- Online decoding rejects every window that holds muscle activity, not only the
+  windows that end while a burst is in progress: a burst that ended inside a
+  window used to let that window be decoded. `JawClenchDetector.last_active`
+  gives the last sample with a burst in progress.
 
 ### Changed
 
