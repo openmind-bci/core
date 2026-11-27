@@ -4,6 +4,7 @@ Subcommands:
 
 * ``info``: versions and data directory;
 * ``profile create|list|show|delete``: local pseudonymized user profiles;
+* ``models list|show|delete``: the local model registry;
 * ``train``: train a model on a public dataset and register it;
 * ``bandpower``: publish the band power per electrode for the 3D brain;
 * ``online``: decode the EEG stream with a registered model and publish commands.
@@ -167,6 +168,93 @@ def profile_delete(
     except (ValueError, ProfileNotFoundError) as exc:
         raise _fail(str(exc.args[0]) if exc.args else str(exc)) from exc
     typer.echo(f"erased profile {user} ({count} files removed)")
+
+
+models_app = typer.Typer(
+    help="Inspect the local model registry ($OPENMIND_DATA_DIR/models).",
+    no_args_is_help=True,
+)
+app.add_typer(models_app, name="models")
+
+
+def _size(n_bytes: int) -> str:
+    """Human-readable size: B, KB, MB or GB."""
+    size = float(n_bytes)
+    for unit in ("B", "KB", "MB"):
+        if size < 1024:
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} GB"
+
+
+@models_app.command("list")
+def models_list() -> None:
+    """List registered models."""
+    from openmind_core.models.registry import list_models, model_size
+
+    try:
+        cards = list_models()
+    except ValueError as exc:
+        raise _fail(str(exc)) from exc
+    if not cards:
+        typer.echo("no models")
+        return
+    typer.echo(
+        f"{'name':<24}{'architecture':<14}{'classes':<9}{'alignment':<11}"
+        f"{'channels':<10}{'size':<11}created"
+    )
+    for card in cards:
+        size = _size(model_size(card.name))
+        typer.echo(
+            f"{card.name:<24}{card.architecture:<14}{len(card.classes):<9}"
+            f"{card.alignment or '-':<11}{len(card.channels):<10}{size:<11}{card.created or '-'}"
+        )
+
+
+@models_app.command("show")
+def models_show(name: Annotated[str, typer.Argument(help="Registry name of the model.")]) -> None:
+    """Show the card of a registered model."""
+    from openmind_core.models.registry import load_card, model_size, validate_name
+
+    try:
+        validate_name(name)
+        card = load_card(name)
+        size = model_size(name)
+    except (ValueError, FileNotFoundError) as exc:
+        raise _fail(str(exc)) from exc
+    typer.echo(f"name          {card.name}")
+    typer.echo(f"architecture  {card.architecture}")
+    typer.echo(f"format        {card.format}")
+    typer.echo(f"classes       {','.join(card.classes)}")
+    typer.echo(f"alignment     {card.alignment or '-'}")
+    typer.echo(f"channels      {','.join(card.channels)}")
+    typer.echo(f"srate         {card.srate:g} Hz")
+    typer.echo(f"n_times       {card.n_times} ({card.n_times / card.srate:g} s)")
+    typer.echo(f"filters       {json.dumps(card.filters, sort_keys=True) if card.filters else '-'}")
+    typer.echo(f"size          {_size(size)}")
+    typer.echo(f"created       {card.created or '-'}")
+    typer.echo(f"openmind-core {card.openmind_core}")
+    if card.training:
+        typer.echo(f"training      {json.dumps(card.training, sort_keys=True)}")
+
+
+@models_app.command("delete")
+def models_delete(
+    name: Annotated[str, typer.Argument(help="Registry name of the model.")],
+    yes: Annotated[bool, typer.Option("--yes", help="Do not ask for confirmation.")] = False,
+) -> None:
+    """Delete a registered model (its card and weights)."""
+    from openmind_core.models.registry import delete_model, load_card, validate_name
+
+    try:
+        validate_name(name)
+        load_card(name)
+        if not yes:
+            typer.confirm(f"Delete model {name}? This cannot be undone", abort=True)
+        count = delete_model(name)
+    except (ValueError, FileNotFoundError) as exc:
+        raise _fail(str(exc)) from exc
+    typer.echo(f"deleted model {name} ({count} files removed)")
 
 
 @app.command("train")

@@ -34,6 +34,10 @@ are listed under their own heading.
 
 ### Added
 
+- `openmind-core models list|show|delete` to inspect the model registry (card,
+  classes, alignment, channels, size), with `delete_model` and `model_size` in
+  `openmind_core.models.registry`.
+
 - Documentation: `docs/architecture.md` (packages, data flow, offline and online
   pipeline, data on disk) and `docs/train-your-model.md` (train, register, run
   online, bring your own classifier, personalisation, sharing rules).
