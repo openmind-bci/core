@@ -24,6 +24,10 @@ are listed under their own heading.
   `warmup_s` seconds of distinct signal. It used to assume the windows were
   contiguous, which kept the warm-up running longer than needed after rejected
   windows.
+- Online windows keep an exact 0.25 s step: at 250 Hz, `SlidingWindow` used a
+  rounded 62-sample step (248 ms, a 0.8 % drift). Steps now alternate between 63
+  and 62 samples; `window_ends` gives the same windows offline, and
+  `SlidingWindow.step` is the exact step in samples (62.5).
 
 ### Changed
 

@@ -246,7 +246,7 @@ class OnlineDecoder:
         start = self._count
         pos = 0
         while pos < n:
-            stop = min(n, pos + self._until_next_window(start + pos))
+            stop = min(n, pos + self._window.until_next)
             segment = picked[pos:stop]
             muscle = False
             if self._jaw is not None:
@@ -263,13 +263,6 @@ class OnlineDecoder:
         return DecoderStep(predictions, actions)
 
     # -- internals -------------------------------------------------------------
-
-    def _until_next_window(self, count: int) -> int:
-        """Samples from ``count`` up to and including the next window end."""
-        first, step = self._window.n_times, self._window.step
-        if count < first:
-            return first - count
-        return step - (count - first) % step
 
     def _reset_warmup(self) -> None:
         self._warmup = []

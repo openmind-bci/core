@@ -14,6 +14,7 @@ from openmind_core.preprocessing import (
     amplitude_mask,
     epochs_at,
     filter_continuous,
+    window_ends,
 )
 
 FS = 250.0
@@ -108,11 +109,25 @@ def test_sliding_window_matches_offline_epochs() -> None:
     produced = []
     for start in range(0, 1500, 37):  # irregular block sizes
         produced += window.push(x[start : start + 37])
-    assert window.n_times == 500 and window.step == round(0.25 * FS)
-    # Windows end every 62 samples once 500 samples are buffered.
-    assert len(produced) == 1 + (1500 - 500) // 62
-    np.testing.assert_array_equal(produced[0], x[:500].T)
-    np.testing.assert_array_equal(produced[1], x[62:562].T)
+    assert window.n_times == 500 and window.step == 0.25 * FS
+    # Windows end every 62.5 samples on average (63 and 62 alternately) once 500
+    # samples are buffered, like the offline ``window_ends``.
+    ends = window_ends(1500, FS)
+    assert ends.tolist()[:4] == [500, 563, 625, 688]
+    assert len(produced) == len(ends) == 1 + (1500 - 500) * 2 // 125
+    for window_data, end in zip(produced, ends, strict=True):
+        np.testing.assert_array_equal(window_data, x[end - 500 : end].T)
+
+
+def test_sliding_window_keeps_exact_steps_over_a_long_stream() -> None:
+    minutes = 10
+    n = round(minutes * 60 * FS)
+    window = SlidingWindow(1, FS)
+    count = 0
+    for start in range(0, n, 997):
+        count += len(window.push(np.zeros((min(997, n - start), 1))))
+    # One window every 0.25 s after the first 2 s: no 0.8 % drift (62-sample steps).
+    assert count == 1 + (minutes * 60 - 2) * 4
 
 
 # --- Artifacts ------------------------------------------------------------------
