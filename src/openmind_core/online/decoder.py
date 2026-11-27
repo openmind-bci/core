@@ -37,6 +37,7 @@ import numpy as np
 import numpy.typing as npt
 
 from openmind_core.alignment import Aligner
+from openmind_core.channels import normalize_label
 from openmind_core.models.registry import ModelCard
 from openmind_core.preprocessing.artifacts import REJECT_PTP_UV, amplitude_mask
 from openmind_core.preprocessing.filters import FilterConfig, StreamFilter
@@ -103,11 +104,6 @@ class DecoderStep:
     actions: list[float]
 
 
-def _normalize(label: str) -> str:
-    """Case-insensitive channel key (``Fc3.``, ``EEG FC3`` and ``fc3`` match ``FC3``)."""
-    return label.strip().rstrip(".").removeprefix("EEG ").strip().casefold()
-
-
 class OnlineDecoder:
     """Decode a live EEG stream with a registered model.
 
@@ -153,14 +149,14 @@ class OnlineDecoder:
         self.n_stream_channels = len(stream_labels)
         keys: dict[str, int] = {}
         for index, label in enumerate(stream_labels):
-            keys.setdefault(_normalize(label), index)
-        missing = [c for c in card.channels if _normalize(c) not in keys]
+            keys.setdefault(normalize_label(label), index)
+        missing = [c for c in card.channels if normalize_label(c) not in keys]
         if missing:
             raise ValueError(
                 f"model {card.name!r} needs channels {missing} missing from the stream "
                 f"{list(stream_labels)}"
             )
-        self._picked = [keys[_normalize(c)] for c in card.channels]
+        self._picked = [keys[normalize_label(c)] for c in card.channels]
         n_channels = len(card.channels)
         filters = config.filters or (FilterConfig(**card.filters) if card.filters else None)
         self._filter = StreamFilter(srate, n_channels, filters)
@@ -176,8 +172,8 @@ class OnlineDecoder:
         self._warmup_samples = 0  # distinct samples covered by the warm-up windows
         self._warmup_end: int | None = None  # end sample of the last warm-up window
         if self._needs_alignment and reference is not None:
-            if tuple(_normalize(c) for c in reference.channels) != tuple(
-                _normalize(c) for c in card.channels
+            if tuple(normalize_label(c) for c in reference.channels) != tuple(
+                normalize_label(c) for c in card.channels
             ):
                 raise ValueError(
                     f"reference channels {list(reference.channels)} differ from the model's "
