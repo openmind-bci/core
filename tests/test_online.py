@@ -296,9 +296,36 @@ def test_jaw_double_clench_gives_an_action_and_pauses_decoding(plain: tuple) -> 
     assert 500.0 + 12.9 < actions[0] < 500.0 + 13.3
     muscle = [p for p in predictions if p.reason == "muscle"]
     assert muscle
-    assert all(500.0 + 12.0 <= p.timestamp <= 500.0 + 13.2 for p in muscle)
+    # Muscle windows hold some of the clenches (12.0-13.2 s); a 2 s window can
+    # end up to 2 s after the last burst.
+    assert all(500.0 + 12.0 <= p.timestamp <= 500.0 + 13.2 + 2.0 for p in muscle)
     assert all(p.probabilities is None and not p.ok for p in muscle)
     assert any(p.ok for p in predictions if p.timestamp < 500.0 + 11.9)
+
+
+def test_burst_that_ended_inside_the_window_rejects_it(plain: tuple) -> None:  # type: ignore[type-arg]
+    from scipy import signal
+
+    data, _ = recording(["left"] * 3, 6.0, seed=6)
+    rng = np.random.default_rng(1)
+    sos = signal.butter(4, 30.0, btype="highpass", fs=FS, output="sos")
+    n = round(0.3 * FS)  # a single 0.3 s clench at 12 s
+    noise = signal.sosfilt(sos, rng.standard_normal((n, 7)), axis=0)
+    noise /= noise.std(axis=0)
+    data[round(12.0 * FS) : round(12.0 * FS) + n] += (
+        120 * noise * signal.windows.tukey(n, 0.3)[:, None]
+    )
+    decoder = OnlineDecoder(*plain, STREAM, FS)
+    predictions, _ = push_in_blocks(decoder, as_stream(data))
+    assert decoder._jaw is not None and decoder._jaw.clenches
+    # Every 2 s window that holds the middle of the burst is muscle, including
+    # the ones that end after the burst is over.
+    holding = [p for p in predictions if p.timestamp - 2.0 < 12.1 and p.timestamp > 12.2]
+    assert any(p.timestamp > 12.6 for p in holding)
+    assert all(p.reason == "muscle" for p in holding), [
+        (round(p.timestamp, 3), p.reason) for p in holding if p.reason != "muscle"
+    ]
+    assert any(p.ok for p in predictions if p.timestamp > 14.5)
 
 
 def test_config_filters_default_to_the_card(plain: tuple) -> None:  # type: ignore[type-arg]

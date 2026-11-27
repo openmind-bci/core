@@ -106,6 +106,7 @@ class JawClenchDetector:
         self._burst_start: int | None = None
         self._burst_peak = -math.inf
         self._last_above = -1
+        self._last_active: int | None = None  # last sample with a burst in progress
         self._previous: int | None = None  # onset of an unpaired clench
         self._refractory_until = -1
         self.clenches: list[float] = []  # onset times (s) of every clench seen
@@ -114,6 +115,16 @@ class JawClenchDetector:
     def active(self) -> bool:
         """Whether muscle activity is in progress (pause decoding meanwhile)."""
         return self._burst_start is not None
+
+    @property
+    def last_active(self) -> int | None:
+        """Index of the last sample during which muscle activity was in progress.
+
+        Counted from the first sample given to the detector; ``None`` until a
+        burst starts. Use it to reject windows that hold a burst which has
+        already ended (:attr:`active` only covers the current sample).
+        """
+        return self._last_active
 
     @property
     def ready(self) -> bool:
@@ -156,6 +167,8 @@ class JawClenchDetector:
         detections: list[float] = []
         for offset, score in enumerate(scores):
             detections += self._step_burst(self._index + offset, float(score))
+            if self._burst_start is not None:
+                self._last_active = self._index + offset
         self._index += n
         return detections
 
