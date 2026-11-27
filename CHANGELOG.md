@@ -35,6 +35,9 @@ are listed under their own heading.
 
 ### Changed
 
+- Channel label normalization is public: `openmind_core.channels.normalize_label`
+  replaces the private `online.decoder._normalize`, which calibration imported.
+
 - Decoding channels default to montage C (eight electrodes, with `CPz`) instead of
   `MONTAGE_A_MI` (seven): `load_epochs` and `epochs_from_raw`. `MONTAGE_A_MI`
   stays exported, and `--channels A` still trains on seven electrodes. Fp1 is

@@ -24,9 +24,9 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
+from openmind_core.channels import normalize_label
 from openmind_core.io import Trial, TrialCollector
 from openmind_core.models.registry import ModelCard
-from openmind_core.online.decoder import _normalize
 from openmind_core.preprocessing import EPOCH_OFFSET_S, WINDOW_S, FilterConfig, StreamFilter
 
 FloatArray = npt.NDArray[np.float64]
@@ -173,14 +173,14 @@ class CalibrationRecorder:
     ) -> None:
         keys: dict[str, int] = {}
         for index, label in enumerate(stream_labels):
-            keys.setdefault(_normalize(label), index)
-        missing = [c for c in card.channels if _normalize(c) not in keys]
+            keys.setdefault(normalize_label(label), index)
+        missing = [c for c in card.channels if normalize_label(c) not in keys]
         if missing:
             raise ValueError(
                 f"model {card.name!r} needs channels {missing} missing from the stream"
             )
         self.card = card
-        self._picked = [keys[_normalize(c)] for c in card.channels]
+        self._picked = [keys[normalize_label(c)] for c in card.channels]
         self._n_stream = len(stream_labels)
         filters = FilterConfig(**card.filters) if card.filters else None
         self.buffer = EpochBuffer(card.channels, srate, filters, keep_s)
