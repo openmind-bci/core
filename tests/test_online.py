@@ -10,7 +10,7 @@ from openmind_core.datasets import MONTAGE_A_MI, EpochSet
 from openmind_core.models import make_baseline
 from openmind_core.models.registry import ModelCard
 from openmind_core.online import OnlineConfig, OnlineDecoder
-from openmind_core.preprocessing import FilterConfig, epochs_at, filter_continuous
+from openmind_core.preprocessing import FilterConfig, epochs_at, filter_continuous, window_ends
 from openmind_core.profiles import Reference
 
 FS = 250.0
@@ -142,7 +142,7 @@ def test_same_probabilities_as_offline(plain: tuple, aligned: tuple) -> None:  #
         assert decoder.state == "running"
 
         filtered = filter_continuous(data, FS, FILTERS)
-        ends = np.arange(N_TIMES, len(data) + 1, round(0.25 * FS))
+        ends = window_ends(len(data), FS)
         epochs, kept = epochs_at(filtered, ends - N_TIMES, FS, offset_s=0.0)
         assert kept.all()
         assert len(predictions) == len(ends)
@@ -208,8 +208,8 @@ def test_warmup_then_running(aligned: tuple) -> None:  # type: ignore[type-arg]
     reasons = [p.reason for p in predictions]
     first_ok = next(i for i, p in enumerate(predictions) if p.ok)
     assert set(reasons[:first_ok]) == {"warmup"}
-    # 10 s of reference: a 2 s window plus 33 steps of 62 samples reach 2500 samples.
-    assert first_ok == 33
+    # 10 s of reference: a 2 s window plus 32 steps of 0.25 s reach 2500 samples.
+    assert first_ok == 32
     assert all(p.probabilities is None for p in predictions[:first_ok])
     assert all(p.ok for p in predictions[first_ok:])
     assert decoder.state == "running"

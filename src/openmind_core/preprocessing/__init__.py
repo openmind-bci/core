@@ -22,6 +22,7 @@ from openmind_core.preprocessing.windows import (
     WINDOW_S,
     SlidingWindow,
     epochs_at,
+    window_ends,
 )
 
 __all__ = [
@@ -47,4 +48,5 @@ __all__ = [
     "detect_double_clenches",
     "epochs_at",
     "filter_continuous",
+    "window_ends",
 ]

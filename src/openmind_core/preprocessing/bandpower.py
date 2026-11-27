@@ -284,8 +284,8 @@ class BandPowerEstimator:
         self._n_samples += data.shape[0]
         frames: list[BandPowerFrame] = []
         for window in self._window.push(data):
+            end = self._window.end_of(self._n_windows)
             self._n_windows += 1
-            end = self._window.n_times + (self._n_windows - 1) * self._window.step
             stamp = None if times is None else float(times[end - 1 - before])
             frames.append(self._frame(window, stamp))
         return frames

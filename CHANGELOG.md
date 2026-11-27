@@ -28,6 +28,10 @@ are listed under their own heading.
   windows that end while a burst is in progress: a burst that ended inside a
   window used to let that window be decoded. `JawClenchDetector.last_active`
   gives the last sample with a burst in progress.
+- Online windows keep an exact 0.25 s step: at 250 Hz, `SlidingWindow` used a
+  rounded 62-sample step (248 ms, a 0.8 % drift). Steps now alternate between 63
+  and 62 samples; `window_ends` gives the same windows offline, and
+  `SlidingWindow.step` is the exact step in samples (62.5).
 
 ### Changed
 
